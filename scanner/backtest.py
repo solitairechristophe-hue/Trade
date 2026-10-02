@@ -45,7 +45,7 @@ def charger() -> list[dict]:
     panel = flux + [r for r in scr if (r["date"], r["ticker"]) not in vus]
     scr_idx = {(r["date"], r["ticker"]): r for r in scr}
     feats = {}
-    for nom in ("regime", "gex", "prix_vol", "positionnement"):
+    for nom in ("regime", "gex", "gex_screener", "prix_vol", "positionnement"):
         for r in _lire(D / f"{nom}.csv"):
             feats.setdefault((r["date"], r["ticker"]), {}).update({k: v for k, v in r.items() if k not in ("date", "ticker")})
     # variables de marché (par date) réutilisables pour tous les titres de la séance
@@ -237,6 +237,20 @@ def analyse() -> str:
             mv = sum(_f(r["move_atr"]) for r in sel) / n if n else float("nan")
             L.append(f"| {nom} | {'≥' + str(lo) if hi == 99 else (str(lo) if hi - lo == 1 else '< 0')} | {n} | "
                      f"{g:.3f} | {wilson(w, n)[0]:.2f}–{wilson(w, n)[1]:.2f} | {mv:+.2f} |")
+    # Validation dédiée aux facteurs gamma : repérés sur le panel flux, testés sur les signaux screener
+    L += ["", "## Filtre gamma : repéré sur le panel flux, testé sur le panel screener", "",
+          "Règle : murs gamma favorables (> 0) ET gamma des dealers négatif.", "",
+          "| Panel | Règle | n | gain 1 ATR | IC 95 % | mvt moyen |", "|---|---|---|---|---|---|"]
+    for nom, ech in (("flux (découverte)", [r for r in rows if r.get("source") == "flux"]),
+                     ("screener (test)", [r for r in rows if r.get("source") != "flux"])):
+        avec = [r for r in ech if r["_f"].get("murs_gamma") is not None and r["_f"].get("gamma_negatif") is not None]
+        for regle, sel in (("vérifiée", [r for r in avec if r["_f"]["murs_gamma"] > 0 and r["_f"]["gamma_negatif"] > 0]),
+                           ("murs seuls > 0", [r for r in avec if r["_f"]["murs_gamma"] > 0]),
+                           ("non vérifiée", [r for r in avec if not (r["_f"]["murs_gamma"] > 0 and r["_f"]["gamma_negatif"] > 0)]),
+                           ("tous", avec)):
+            n, w, g = _taux(sel)
+            mv = sum(_f(r["move_atr"]) for r in sel) / n if n else float("nan")
+            L.append(f"| {nom} | {regle} | {n} | {g:.3f} | {wilson(w, n)[0]:.2f}–{wilson(w, n)[1]:.2f} | {mv:+.2f} |")
     L += ["", "Lecture : un facteur utile a un « gain » nettement plus haut quand il confirme que quand il contredit, "
           "et un mouvement moyen positif quand il confirme. Avec moins de 300 signaux sur deux mois, un écart de "
           "moins de 10 points n'est pas distinguable du bruit."]

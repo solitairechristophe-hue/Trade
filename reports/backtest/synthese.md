@@ -58,4 +58,19 @@ Facteurs retenus sur la première moitié : gamma_negatif, liquidite_os, murs_ga
 | test | 1 | 24 | 0.208 | 0.09–0.41 | -0.44 |
 | test | ≥2 | 372 | 0.277 | 0.23–0.32 | -0.11 |
 
+## Filtre gamma : repéré sur le panel flux, testé sur le panel screener
+
+Règle : murs gamma favorables (> 0) ET gamma des dealers négatif.
+
+| Panel | Règle | n | gain 1 ATR | IC 95 % | mvt moyen |
+|---|---|---|---|---|---|
+| flux (découverte) | vérifiée | 38 | 0.342 | 0.21–0.50 | +0.21 |
+| flux (découverte) | murs seuls > 0 | 103 | 0.291 | 0.21–0.39 | +0.02 |
+| flux (découverte) | non vérifiée | 94 | 0.191 | 0.12–0.28 | -0.26 |
+| flux (découverte) | tous | 132 | 0.235 | 0.17–0.31 | -0.13 |
+| screener (test) | vérifiée | 0 | nan | 0.00–1.00 | +nan |
+| screener (test) | murs seuls > 0 | 0 | nan | 0.00–1.00 | +nan |
+| screener (test) | non vérifiée | 0 | nan | 0.00–1.00 | +nan |
+| screener (test) | tous | 0 | nan | 0.00–1.00 | +nan |
+
 Lecture : un facteur utile a un « gain » nettement plus haut quand il confirme que quand il contredit, et un mouvement moyen positif quand il confirme. Avec moins de 300 signaux sur deux mois, un écart de moins de 10 points n'est pas distinguable du bruit.
