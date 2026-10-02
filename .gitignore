@@ -7,3 +7,4 @@ __pycache__/
 reports/*
 !reports/README.md
 !reports/ia/
+*.zip
