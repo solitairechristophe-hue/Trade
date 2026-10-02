@@ -10,3 +10,4 @@ reports/*
 !reports/calibration.md
 !reports/calibration-signaux.csv
 *.zip
+!reports/backtest/
