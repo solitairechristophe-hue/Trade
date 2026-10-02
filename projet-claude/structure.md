@@ -23,3 +23,9 @@ plafond = limite, TP = 50 % du crédit, SL = 150 % du crédit ; jambes décrites
 Condition d'entrée ±0,15 ATR, stop action 1,5 ATR (ou au-delà du mur gamma), sortie temps = échéance − 7 j.
 Quantité = min(2 % NAV / risque par combo, 3 % NAV / prime par combo (débit), 5). p = 0,38 + 0,24 × score/100.
 EV = p × gain TP − (1 − p) × perte SL ; classement par EV / $ risqué, EV > 0 seulement.
+
+## Mode matin, sans surveillance de séance
+Le stop loss à 50 % de la prime n'est pas surveillé : la perte retenue est la perte maximale du spread
+(prime entière pour un débit, (largeur − crédit) × 100 pour un crédit). Quantité = min(2 % NAV / perte maximale, 5).
+EV = p × gain au TP − (1 − p) × perte maximale. Le TP reste posé chez IBKR en LIMIT GTC attaché à l'entrée.
+Limite calculée sur le mid de clôture de la veille ; condition et stop action sur le cours de préouverture.

@@ -4,6 +4,7 @@
 2. Instructions du projet : coller le contenu de `INSTRUCTIONS.md`.
 3. Connaissances du projet : ajouter `SKILL.md`, `scoring.md`, `structure.md`, `tickets-README.md`.
 4. Connecteurs : activer Unusual Whales et Interactive Brokers (IBKR) dans la conversation.
-5. Lancer : « run » (ou « run, et crée les instructions IBKR » pour autoriser la création des brouillons d'ordre).
-6. Routine horaire : créer depuis l'interface Routines, dans ce projet, avec les deux connecteurs,
-   prompt « Fais le run du Desk Flow », cadence jours ouvrés 10h05–15h05 (New York).
+5. Chaque matin vers 11h30 (Paris) : « run ». Ajouter « et crée les instructions IBKR » ou « et crée les alertes »
+   pour autoriser ces créations. Poser ensuite dans TWS les ordres conditionnels du bloc « Ordres à poser ».
+6. Facultatif : une Routine à 11h15 (Paris) les jours ouvrés, créée depuis l'interface Routines dans ce projet
+   avec les deux connecteurs, prompt « run », pour trouver le rapport prêt en arrivant.

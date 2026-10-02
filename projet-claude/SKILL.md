@@ -1,9 +1,9 @@
 ---
 name: desk-flow
-description: Run horaire du Desk Flow depuis Claude avec les connecteurs Unusual Whales (100 % des flux) et IBKR — régime de marché, meilleures opportunités, ordres calculés (spreads verticaux dimensionnés sur la NAV), instructions d'ordre créées dans IBKR et tickets déposés pour le robot.
+description: Run du Desk Flow depuis Claude (mode matin par défaut, run manuel vers 11h30 à Paris, ordres conditionnels posés par l'utilisateur ; mode horaire en séance) avec les connecteurs Unusual Whales (100 % des flux) et IBKR — régime de marché, meilleures opportunités, ordres calculés (spreads verticaux dimensionnés sur la NAV), instructions d'ordre créées dans IBKR et tickets déposés pour le robot.
 ---
 
-# Desk Flow (connecteurs) — run horaire
+# Desk Flow (connecteurs)
 
 Même logique que le scanner Python (`scanner/`), exécutée ici avec les **connecteurs** Unusual Whales et IBKR.
 Le code de référence fait foi pour les formules : `scanner/scoring.py` (poids), `scanner/structure.py`
@@ -14,6 +14,60 @@ l'utilisateur soumet lui-même ; le robot, lui, exécute les tickets selon `DRY_
 garde-fous du robot s'appliquent (risque ≤ 2 % NAV, prime ≤ 3 % NAV, risque cumulé ≤ 10 %, 3 ordres/jour,
 5 contrats, un trade par titre) ; au plus 3 tickets par run ; rien sur un titre déjà en position,
 déjà proposé aujourd'hui, ou proposé dans les 3 derniers jours.
+
+## Mode matin (par défaut) : run manuel vers 11h30 à Paris
+
+L'utilisateur est en Europe, disponible le matin seulement. Il lance le run lui-même vers 11h30 à Paris
+(5h30 à New York, 6h30 entre le dernier dimanche d'octobre et le premier dimanche de novembre, marché US fermé)
+et pose lui-même les ordres conditionnels dans TWS. Personne ne surveille la séance. Ce mode s'applique dès que
+le marché US est fermé ; les étapes ci-dessous s'appliquent avec ces changements :
+
+- **Fenêtre de flux** : toute la séance US précédente (`newer_than` = ouverture 09:30 NY de la dernière séance,
+  `date` = dernière séance pour le tide, les screeners et le dark pool), pas les 90 dernières minutes.
+- **Open interest** : les variations de la veille sont publiées vers 6h45 NY (12h45 à Paris) ; à 11h30, celles
+  disponibles datent de l'avant-veille. Les utiliser comme confirmation de second rang et le dire au rapport.
+- **Préouverture** : à partir de 4h NY, le cours de l'action est disponible (`get_price_snapshot` IBKR champ
+  `last`, ou dernière bougie UW). Condition d'entrée, stop action et filtres de prix partent de ce cours.
+  Un gap de plus de 1 ATR contre le sens du trade depuis la clôture invalide le dossier.
+- **Risk-off** : un événement majeur **dans la journée** (CPI, emploi, PCE, PPI à 8h30 NY = 14h30 Paris, FOMC,
+  PIB, ISM, ventes au détail) suffit ; rapport seulement, aucun ordre.
+- **Cotations d'options** : celles de la clôture de la veille (les options ne cotent pas avant 9h30 NY).
+  Limite = mid de clôture + 15 % du spread, jamais au-dessus du plafond ; si la chaîne n'a ni bid ni ask,
+  spread estimé à max(0,10 ; 10 % du mid) et le dire.
+- **Taille sans surveillance** : le stop loss à 50 % de la prime ne peut pas être surveillé. Le risque retenu est
+  la perte maximale du spread : prime entière pour un débit, (largeur − crédit) × 100 pour un crédit.
+  Quantité = min(2 % NAV / perte maximale par combo, 5). `max_loss` du ticket = perte maximale.
+  L'espérance se calcule avec cette perte maximale.
+- **Quota** : les 3 trades du jour sont choisis dans ce seul run.
+
+### Ordres à poser dans TWS (sortie principale du mode matin)
+
+Pour chaque trade retenu, un bloc prêt à recopier :
+
+1. **Combo** : symbole, échéance, strikes, achat/vente de chaque jambe, quantité, côté BUY (débit) ou SELL (crédit).
+2. **Ordre d'entrée** : LIMIT au prix limite, TIF DAY.
+3. **Condition** : « prix de <action> ≥ (ou ≤) <niveau> », méthode de déclenchement « Last », case
+   « autoriser hors séance régulière » **décochée** (sinon un échange de préouverture peut déclencher l'ordre
+   avant que les options cotent).
+4. **Take profit** : ordre attaché « Profit Taker » LIMIT GTC au niveau TP.
+5. **Stop sur l'action** : niveau de clôture qui invalide le trade ; proposer une alerte de prix IBKR
+   (`create_alert`, seulement si l'utilisateur le demande) pour être prévenu sur le téléphone.
+6. **Sortie temps** : date à laquelle fermer la position, quoi qu'il arrive.
+
+Si l'utilisateur a demandé les instructions IBKR, créer en plus l'instruction (étape 6) : elle porte la limite et
+la quantité ; la condition et le take profit restent à ajouter dans TWS au moment de la valider.
+
+### Suivi des positions (chaque matin, avant la recherche)
+
+Pour chaque position ouverte par le desk (`get_account_positions`, tickets `flow-ia` des jours précédents) :
+valeur du combo à la clôture de la veille, distance au TP, clôture de l'action par rapport au stop, date de
+sortie temps. Signaler en tête de rapport, avec l'ordre de clôture à poser (LIMIT DAY au mid de clôture) :
+action clôturée au-delà du stop, sortie temps atteinte, résultats avant la prochaine séance, ou valeur du combo
+sous 30 % de la prime payée (le reste ne vaut plus le risque).
+
+## Mode horaire (en séance)
+
+Marché ouvert : la procédure ci-dessous s'applique telle quelle.
 
 ## 0. Préparation
 
