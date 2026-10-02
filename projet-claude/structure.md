@@ -23,7 +23,8 @@ plafond = limite, TP = 50 % du crédit, SL = 150 % du crédit ; jambes décrites
 Condition d'entrée ±0,15 ATR, stop action 1,5 ATR (ou au-delà du mur gamma), sortie temps = run + 10 jours
 calendaires (~7 séances), jamais après échéance − 7 j.
 Quantité = min(2 % NAV / risque par combo, 3 % NAV / prime par combo (débit), 5).
-p = p_min + (p_max − p_min) × score/100, p_min et p_max issus de la calibration (`calibration.md`), à défaut 0,38 et 0,62.
+p = p_min + (p_max − p_min) × score/100, p_min et p_max issus de la calibration (`calibration.md`), bornés à
+[0,30 ; 0,70]. Mesure du 2 octobre 2026 : p_min 0,243 et p_max 0,259, donc **p = 0,30 quel que soit le score**.
 EV = p × gain TP − (1 − p) × perte SL ; classement par EV / $ risqué, EV > 0 seulement.
 
 ## Mode matin, sans surveillance de séance

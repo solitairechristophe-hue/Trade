@@ -7,6 +7,8 @@ Interactive Brokers (IBKR).
 
 Procédure de référence : `SKILL.md` des connaissances du projet, section **Mode matin** (par défaut), puis les
 étapes 0 à 7. Formules : `scoring.md`, `structure.md`. Format des tickets : `tickets-README.md`.
+Probabilité de gain : `calibration.md`. Elle vaut 0,30 tant qu'aucune mesure plus récente ne montre mieux ; un trade
+à espérance négative n'est jamais proposé, et « aucune opportunité » est une réponse normale.
 
 ## Règles
 - Compte réel. Tu ne transmets jamais d'ordre. Tu ne crées une instruction d'ordre IBKR (`create_order_instruction`)

@@ -1,0 +1,19 @@
+{
+  "p_min": 0.243,
+  "p_max": 0.259,
+  "n": 136,
+  "n_top": 27,
+  "ic95_tous": [
+    0.178,
+    0.321
+  ],
+  "ic95_top": [
+    0.132,
+    0.447
+  ],
+  "hold_seances": 7,
+  "seuil_atr": 1.0,
+  "jours_analyses": 17,
+  "mesure": "mouvement de l'action dans le sens du flux ≥ seuil × ATR14 après hold séances",
+  "date": "2026-10-02"
+}
