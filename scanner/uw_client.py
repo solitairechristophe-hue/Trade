@@ -124,7 +124,7 @@ class UwClient:
         rows = self._liste("/api/stock/SPY/greek-exposure", {"timeframe": "1W"})
         if not rows:
             return None
-        last = rows[-1] if _date(_g(rows[-1], "date")) and rows[0].get("date") and rows[-1]["date"] >= rows[0]["date"] else rows[0]
+        last = max(rows, key=lambda r: str(_g(r, "date", defaut="")))
         return _f(_g(last, "call_gamma")) + _f(_g(last, "put_gamma"))
 
     def top_net_impact(self) -> list[dict]:
@@ -135,7 +135,7 @@ class UwClient:
         rows = self._liste("/api/option-trades/flow-alerts", {
             "newer_than": newer_than.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
             "min_premium": int(self.cfg.min_premium_alert), "min_dte": 5, "max_dte": 90,
-            "issue_types[]": list(self.cfg.issue_types), "all_opening": "false", "limit": 200,
+            "issue_types[]": list(self.cfg.issue_types), "limit": 200,
         })
         out = []
         for r in rows:
@@ -252,9 +252,9 @@ class UwClient:
                 ctx.atr14 = _f(_g(r, "atr_14"))
                 ctx.sma20 = _f(_g(r, "ema_20"))
                 ctx.marketcap = _f(_g(r, "marketcap"))
-                ctx.iv_rank = _f(_g(r, "iv_rank"), -1) / 100 if _g(r, "iv_rank") is not None else None
-                if ctx.iv_rank is not None and ctx.iv_rank < 0:
-                    ctx.iv_rank = None
+                if _g(r, "iv_rank") is not None:
+                    v = _f(_g(r, "iv_rank"))
+                    ctx.iv_rank = v / 100 if v > 1 else v  # fraction ou pourcentage selon la version
                 ctx.iv30 = _f(_g(r, "iv30d")) or None
                 ctx.net_call_premium = _f(_g(r, "net_call_premium"))
                 ctx.net_put_premium = _f(_g(r, "net_put_premium"))

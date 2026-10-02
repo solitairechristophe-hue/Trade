@@ -90,6 +90,10 @@ IBKR s'écarte de plus de 10 % du mid UW, recalculer limite/TP/SL avec IBKR), `g
 `create_order_instruction` (LIMIT, `limit_price` = limite, `quantity`, `side` = BUY pour un débit / SELL pour un crédit,
 `time_in_force` DAY). Noter l'URL de l'instruction dans le rapport. Jamais plus de 3 instructions par run.
 
+La création d'instructions est une action sur le compte : elle n'a lieu que si l'utilisateur l'a autorisée
+dans la session (ou dans le prompt de la Routine). Sinon l'étape 6 reste en **lecture seule** : vérifier les jambes
+et noter les identifiants de contrats IBKR (et le combo) dans le rapport, pour que l'utilisateur crée l'ordre lui-même.
+
 ## 7. Sorties
 
 1. `tickets/<AAAA-MM-JJ>-flow-ia.json` (desk `flow-ia`, format `tickets/README.md`, ids `flow-ia-<date>-<SYM>`,
