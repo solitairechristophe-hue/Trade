@@ -48,10 +48,17 @@ def charger() -> list[dict]:
     for nom in ("regime", "gex", "prix_vol", "positionnement"):
         for r in _lire(D / f"{nom}.csv"):
             feats.setdefault((r["date"], r["ticker"]), {}).update({k: v for k, v in r.items() if k not in ("date", "ticker")})
+    # variables de marché (par date) réutilisables pour tous les titres de la séance
+    par_date: dict[str, dict] = {}
+    for r in _lire(D / "regime.csv"):
+        par_date.setdefault(r["date"], {k: r[k] for k in ("tide_pente", "tide_niveau", "tide_bias", "spy_tide",
+                                                         "qqq_tide", "spy_gex_net", "spy_gex_positive",
+                                                         "macro_event_next_day") if k in r})
     out = []
     for r in panel:
         k = (r["date"], r["ticker"])
         row = dict(r)
+        row.update(par_date.get(r["date"], {}))
         row.update(feats.get(k, {}))
         s = scr_idx.get(k)
         row["screener_dir"] = s["direction"] if s else ""
