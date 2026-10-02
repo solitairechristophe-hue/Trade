@@ -126,3 +126,18 @@ Unusual Whales : `get_market_tide`, `get_gex_levels` (SPY + 13 titres), `get_gre
 IWM, XBI), `get_options_chain` (IWM 23/10 et 30/10).
 Non appelés (économie, aucun dossier hors setup gamma à enrichir) : dark pool, OI, initiés, Congrès, presets Deep
 Conviction, secteurs, enrichissement complet §3. L'ATR inclut la bougie du jour en cours (comme le scanner).
+
+
+## Mise à jour après la porte de volatilité (même jour)
+
+Le ticket IWM est **retiré**. Son option est trop chère pour la règle ajoutée après la revue de littérature :
+
+| Mesure | Valeur |
+|---|---|
+| IV 30 jours (Unusual Whales) | 18,9 % |
+| Volatilité prévue HAR (clôtures jusqu'au 1er octobre) | 9,0 % |
+| Volatilité réalisée selon Unusual Whales | 11,2 % |
+| Ratio IV / volatilité prévue | 1,6 à 2,1, plafond 1,2 |
+
+En backtest, le setup gamma avec une option chère (ratio > 1,3) perdait 12 % de la prime en moyenne.
+**Aucun trade ne passe toutes les portes aujourd'hui.**

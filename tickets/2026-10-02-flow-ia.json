@@ -1,42 +1,5 @@
 {
   "run_date": "2026-10-02",
   "desk": "flow-ia",
-  "tickets": [
-    {
-      "id": "flow-ia-2026-10-02-IWM",
-      "symbol": "IWM",
-      "direction": "down",
-      "side": "BUY",
-      "quantity": 1,
-      "limit_price": 2.62,
-      "price_cap": 2.62,
-      "take_profit": 5.04,
-      "stop_loss": 1.31,
-      "max_loss": 144.1,
-      "premium": 262,
-      "legs": [
-        {
-          "expiry": "20261023",
-          "strike": 282,
-          "right": "P",
-          "action": "BUY",
-          "ratio": 1
-        },
-        {
-          "expiry": "20261023",
-          "strike": 274,
-          "right": "P",
-          "action": "SELL",
-          "ratio": 1
-        }
-      ],
-      "condition": {
-        "op": "<=",
-        "price": 280.75
-      },
-      "underlying_stop": 287.06,
-      "time_exit": "2026-10-12",
-      "note": "bear put spread 282/274 P 2026-10-23 (debit, setup gamma : murs +0,71, gamma dealers -4,54 M ; mid IBKR 12:40 NY 4,765 - 2,15 = 2,615 -> 2,62 ; ecart cumule 0,09 = 1,1 % de la largeur ; EV setup gamma +2,9 % x 262 = +7,6 $). Taille d'essai 1 combo. Run 12:40, nouvelles regles (portes gamma)."
-    }
-  ]
+  "tickets": []
 }
