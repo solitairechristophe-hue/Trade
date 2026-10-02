@@ -1,0 +1,26 @@
+{
+  "run_date": "2026-10-02",
+  "desk": "swing",
+  "tickets": [
+    {
+      "id": "swing-2026-10-02-SMCI",
+      "symbol": "SMCI",
+      "direction": "up",
+      "side": "BUY",
+      "quantity": 1,
+      "limit_price": 2.80,
+      "price_cap": 3.00,
+      "take_profit": 6.10,
+      "stop_loss": 1.60,
+      "max_loss": 160,
+      "premium": 280,
+      "legs": [
+        {"expiry": "20261030", "strike": 39, "right": "C", "action": "BUY"},
+        {"expiry": "20261030", "strike": 47, "right": "C", "action": "SELL"}
+      ],
+      "condition": {"op": ">=", "price": 42.10},
+      "underlying_stop": 38.0,
+      "time_exit": "2026-10-23"
+    }
+  ]
+}

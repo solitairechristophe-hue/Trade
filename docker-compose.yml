@@ -1,0 +1,34 @@
+# Robot d'exécution IBKR : IB Gateway (avec IBC pour la connexion automatique) + robot.
+# Lancer : docker compose up -d --build     Journal : docker compose logs -f robot
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: always
+    environment:
+      TWS_USERID: ${TWS_USERID}
+      TWS_PASSWORD: ${TWS_PASSWORD}
+      TRADING_MODE: ${TRADING_MODE:-live}
+      READ_ONLY_API: "no"
+      TWOFA_TIMEOUT_ACTION: restart
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      AUTO_RESTART_TIME: "11:59 PM"     # redémarrage quotidien sans nouvelle 2FA (2FA une fois par semaine)
+      EXISTING_SESSION_DETECTED_ACTION: primary
+      TIME_ZONE: America/New_York
+      VNC_SERVER_PASSWORD: ${VNC_SERVER_PASSWORD:-}
+    ports:
+      - "127.0.0.1:5900:5900"  # VNC, uniquement via un tunnel SSH, pour dépanner
+    # Aucun port API publié : seul le robot, sur le réseau interne, y accède.
+
+  robot:
+    build: .
+    restart: always
+    depends_on: [ib-gateway]
+    env_file: .env
+    environment:
+      IB_HOST: ib-gateway
+      TICKETS_DIR: /tickets
+      STATE_FILE: /data/etat.sqlite
+      KILL_SWITCH_FILE: /data/STOP
+    volumes:
+      - ./tickets:/tickets:ro
+      - ./data:/data
