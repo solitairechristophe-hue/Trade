@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -34,17 +35,37 @@ class Resultat:
 def alias_de_cotation(instruments: dict[int, dict], alias_symboles: dict[str, str] | None = None) -> dict[int, int]:
     """id d'une cotation secondaire → id de la cotation principale du même titre.
 
-    Cotations « séance régulière » (suffixe .RTH) et classes d'actions d'un même émetteur (alias_symboles).
+    Un même titre apparaît sous plusieurs identifiants : séance régulière (AAPL.RTH), autres places
+    (ASML.NV, GOOG.EUR, RACE.MI) et classes d'actions (GOOGL, via alias_symboles). On regroupe les
+    actions et ETF de même nom, en gardant de préférence la cotation sans suffixe, à New York.
     """
+    def cle_nom(m: dict) -> tuple[str, str] | None:
+        nom = re.sub(r"[^a-z0-9]", "", (m.get("nom") or "").lower())
+        type_ = (m.get("type") or "").lower()
+        return (type_, nom) if nom and type_ in ("stocks", "etf") else None
+
+    def preference(i: int) -> tuple:
+        sym = (instruments[i].get("symbol") or "").upper()
+        return ("." in sym, instruments[i].get("exchangeId") not in (4, 5), len(sym), i)
+
+    groupes: dict[tuple, list[int]] = {}
+    for i, m in instruments.items():
+        cle = cle_nom(m)
+        if cle:
+            groupes.setdefault(cle, []).append(i)
+    alias: dict[int, int] = {}
+    for ids in groupes.values():
+        principal = min(ids, key=preference)
+        alias.update({i: principal for i in ids if i != principal})
+
     par_symbole = {(m.get("symbol") or "").upper(): i for i, m in instruments.items() if m.get("symbol")}
-    alias = {}
     for i, m in instruments.items():
         sym = (m.get("symbol") or "").upper()
         base = sym[:-4] if sym.endswith(".RTH") else sym
         base = (alias_symboles or {}).get(base, base).upper()
         if base != sym and base in par_symbole and par_symbole[base] != i:
-            alias[i] = par_symbole[base]
-    return alias
+            alias[i] = alias.get(par_symbole[base], par_symbole[base])
+    return {i: c for i, c in alias.items() if i != c}
 
 
 def _composition(col: Collecteur, username: str, cfg: Config, jour: dt.date):

@@ -174,3 +174,33 @@ def rang_percentile(valeurs: dict[str, float | None], plus_haut_mieux: bool = Tr
             rangs[connus[k][0]] = rang
         i = j + 1
     return rangs
+
+
+def _quantile(triees: list[float], q: float) -> float:
+    if not triees:
+        raise ValueError("liste vide")
+    pos = q * (len(triees) - 1)
+    i = int(pos)
+    j = min(i + 1, len(triees) - 1)
+    return triees[i] + (triees[j] - triees[i]) * (pos - i)
+
+
+def echelle(valeurs: dict[str, float | None], log: bool = False, q_bas: float = 0.02,
+            q_haut: float = 1.0) -> dict[str, float]:
+    """Ramène les valeurs connues sur [0, 1] (min-max, plancher au quantile q_bas, en log si demandé).
+
+    Contrairement au rang centile, l'échelle garde les écarts de grandeur : un ticker détenu par
+    60 % des portefeuilles se détache nettement d'un ticker qui en réunit 20 %.
+    """
+    connus = {k: float(v) for k, v in valeurs.items() if v is not None and not math.isnan(v)}
+    if not connus:
+        return {}
+    if log:
+        positifs = [v for v in connus.values() if v > 0]
+        plancher = min(positifs) / 2 if positifs else 1e-9
+        connus = {k: math.log(max(v, plancher)) for k, v in connus.items()}
+    triees = sorted(connus.values())
+    bas, haut = _quantile(triees, q_bas), _quantile(triees, q_haut)
+    if haut <= bas:
+        return {k: 0.5 for k in connus}
+    return {k: min(1.0, max(0.0, (v - bas) / (haut - bas))) for k, v in connus.items()}

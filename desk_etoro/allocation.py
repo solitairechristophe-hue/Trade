@@ -1,7 +1,7 @@
 """Portefeuille cible : sélection des tickers, poids, facteur multiplicateur (levier) et stops.
 
-Poids : w_i ∝ ((score_i − score_min)/(100 − score_min)) ** exposant_score / vol_i ** exposant_vol
-(l'excédent de score au-dessus du seuil, les scores du haut de classement étant serrés), puis plafonds par ligne,
+Poids : w_i ∝ ((score_i − plancher)/(100 − plancher)) ** exposant_score / vol_i ** exposant_vol
+(l'excédent de score au-dessus d'un plancher), puis plafonds par ligne,
 plancher, plafond crypto et réserve de liquidités.
 Levier : seulement pour une valeur à haut score ET adaptée au levier — classe d'actif admise,
 volatilité modérée, tendance haussière (cours au-dessus des moyennes 50 et 200 jours), proche de
@@ -147,7 +147,7 @@ def ponderer(lignes: list[LigneCible], cfg: Allocation) -> float:
         return 1.0
     vols = [l.vol for l in lignes if l.vol]
     vol_defaut = median(vols) if vols else 0.30
-    plancher = min(cfg.score_min, min(l.score for l in lignes) - 1)  # une ligne gardée sous le seuil garde un poids
+    plancher = min(cfg.score_plancher_poids, min(l.score for l in lignes) - 1)  # une ligne gardée garde un poids
     bruts = {l.instrument_id: ((l.score - plancher) / (100 - plancher)) ** cfg.exposant_score
              / max(0.10, l.vol or vol_defaut) ** cfg.exposant_vol for l in lignes}
     poids = _repartir(bruts, investi, cfg.poids_max, cfg.poids_min)
@@ -193,7 +193,9 @@ def appliquer_levier(l: LigneCible, elig: dict | None, risque: Risque, cfg: Allo
         l.levier, l.motif_levier = 1, f"levier × vol > {cfg.vol_cible_position:.0%}"
         return
     l.levier = max(adaptes)
-    l.motif_levier = f"x{l.levier} : score {l.score:.0f}, vol {risque.vol:.0%}, tendance haussière"
+    reglement = next((c.get("settlementType") for lv, c in permis if lv == l.levier), None)
+    en = f" en {reglement.upper()}" if reglement and reglement.lower() != "real" else ""
+    l.motif_levier = f"x{l.levier}{en} : score {l.score:.0f}, vol {risque.vol:.0%}, tendance haussière"
 
 
 def poser_stop(l: LigneCible, elig: dict | None, cfg: Allocation) -> None:
@@ -211,7 +213,8 @@ def poser_stop(l: LigneCible, elig: dict | None, cfg: Allocation) -> None:
                 d = min(d, maxi / 100 / l.levier)
             break
     l.stop_pct = d
-    l.stop = round(l.cours * (1 - d) if l.sens == "long" else l.cours * (1 + d), 4)
+    prix = l.cours * (1 - d) if l.sens == "long" else l.cours * (1 + d)
+    l.stop = round(prix, 2 if prix >= 1 else 6)
 
 
 def construire(notes: list[NoteTicker], instruments: dict[int, dict], eligibilites: dict[int, dict],

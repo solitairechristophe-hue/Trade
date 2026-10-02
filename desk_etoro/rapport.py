@@ -137,11 +137,13 @@ def markdown(res: Resultat, cfg: Config) -> str:
     L.append("")
     t = cfg.tickers
     L += ["## Méthode", "",
-          f"- **Score d'un ticker** (0–100) : rangs centiles du consensus pondéré par la qualité ({t.poids_consensus:.0%}), "
+          f"- **Score d'un ticker** (0–100) : somme pondérée du consensus pondéré par la qualité ({t.poids_consensus:.0%}), "
           f"de la largeur de détention ({t.poids_largeur:.0%}), de la conviction des détenteurs ({t.poids_conviction:.0%}), "
           f"de la qualité moyenne des détenteurs ({t.poids_qualite_detenteurs:.0%}) et des entrées de moins de "
-          f"{t.jours_fraicheur} jours ({t.poids_fraicheur:.0%}).",
-          f"- **Poids** ∝ ((score − {a.score_min:g}) / {100 - a.score_min:g})^{a.exposant_score:g} / volatilité^{a.exposant_vol:g}, "
+          f"{t.jours_fraicheur} jours ({t.poids_fraicheur:.0%}), chacun ramené sur [0, 1] entre son quantile 2 % et "
+          f"son maximum (échelle logarithmique pour les trois premiers).",
+          f"- **Poids** ∝ ((score − {a.score_plancher_poids:g}) / {100 - a.score_plancher_poids:g})^{a.exposant_score:g} "
+          f"/ volatilité^{a.exposant_vol:g}, "
           f"entre {_pct(a.poids_min, 0)} et "
           f"{_pct(a.poids_max, 0)} par ligne, crypto ≤ {_pct(a.poids_max_crypto, 0)}, réserve {_pct(a.reserve_cash, 0)}.",
           f"- **Facteur multiplicateur** : score ≥ {a.score_levier:g} et rang ≤ {a.rang_max_levier}, classe {', '.join(a.classes_levier)}, volatilité ≤ "

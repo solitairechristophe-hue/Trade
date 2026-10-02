@@ -40,6 +40,14 @@ def test_rang_percentile_ex_aequo_et_absents():
     assert metriques.rang_percentile({"a": 1, "b": 5}, plus_haut_mieux=False) == {"b": 0.0, "a": 1.0}
 
 
+def test_echelle_garde_les_ecarts():
+    e = metriques.echelle({"a": 0.6, "b": 0.2, "c": 0.01, "d": None}, log=True, q_bas=0, q_haut=1)
+    assert e["a"] == 1.0 and e["c"] == 0.0 and 0.6 < e["b"] < 0.8
+    assert metriques.echelle({"a": 1, "b": 1}) == {"a": 0.5, "b": 0.5}
+    lin = metriques.echelle({str(i): float(i) for i in range(101)})
+    assert lin["0"] == 0.0 and lin["100"] == 1.0 and lin["50"] == pytest.approx(0.5, abs=0.02)
+
+
 # -- Composition ----------------------------------------------------------------------------
 def live(positions, copies=()):
     return {"positions": list(positions), "socialTrades": list(copies)}
@@ -99,6 +107,13 @@ def test_fusion_des_cotations():
     alias = alias_de_cotation({1: {"symbol": "AMZN"}, 2: {"symbol": "AMZN.RTH"}, 3: {"symbol": "XYZ.RTH"},
                                4: {"symbol": "GOOG"}, 5: {"symbol": "GOOGL"}, 6: {"symbol": "GOOGL.RTH"}}, {"GOOGL": "GOOG"})
     assert alias == {2: 1, 5: 4, 6: 4}
+    par_nom = alias_de_cotation({
+        10: {"symbol": "ASML.NV", "nom": "ASML Holding NV", "type": "Stocks", "exchangeId": 30},
+        11: {"symbol": "ASML", "nom": "ASML Holding NV", "type": "Stocks", "exchangeId": 4},
+        12: {"symbol": "SHEL", "nom": "Shell PLC (ADR)", "type": "Stocks", "exchangeId": 5},
+        13: {"symbol": "SHEL.L", "nom": "Shell PLC", "type": "Stocks", "exchangeId": 7},
+        14: {"symbol": "BTC", "nom": "Bitcoin", "type": "Crypto"}, 15: {"symbol": "BTCX", "nom": "Bitcoin", "type": "Crypto"}})
+    assert par_nom == {10: 11}  # l'ADR garde son nom propre, la crypto n'est pas regroupée
     c = composition.analyser(live([pos(1, 20), pos(2, 30, ouverture="2026-09-30T10:00:00Z")]), JOUR)
     c.fusionner(alias)
     assert set(c.lignes) == {1} and c.lignes[1].poids == pytest.approx(0.5)
@@ -205,7 +220,7 @@ def test_levier_conditions():
     l = lc(1, 90, vol=0.20, cours=110)
     allocation.appliquer_levier(l, elig(), haussier, cfg)
     assert l.levier == 2  # x5 exclu par levier_max
-    l2 = lc(2, 70, vol=0.20)
+    l2 = lc(2, 60, vol=0.20)
     allocation.appliquer_levier(l2, elig(), haussier, cfg)
     assert l2.levier == 1 and "score" in l2.motif_levier
     l2b = lc(7, 95, vol=0.20)
@@ -221,9 +236,9 @@ def test_levier_conditions():
     l5 = lc(5, 90, vol=0.20)
     allocation.appliquer_levier(l5, elig(leviers=(1,)), haussier, cfg)
     assert l5.levier == 1 and "eToro" in l5.motif_levier
-    l6 = lc(6, 90, vol=0.30)  # 2 × 30 % > 50 % de vol cible
-    allocation.appliquer_levier(l6, elig(), Risque(dernier=110, vol=0.30, mm50=100, mm200=90, recul_52s=-0.05), cfg)
-    assert l6.levier == 1
+    l6 = lc(6, 90, vol=0.32)  # 2 × 32 % > 60 % de vol cible
+    allocation.appliquer_levier(l6, elig(), Risque(dernier=110, vol=0.32, mm50=100, mm200=90, recul_52s=-0.05), cfg)
+    assert l6.levier == 1 and "levier × vol" in l6.motif_levier
 
 
 def test_stop_borne_par_etoro():
@@ -260,7 +275,7 @@ def test_construire_hysteresis_levier_plafond():
     assert sum(l.poids for l in cible.lignes) == pytest.approx(1.0)
     # x2 partout aurait donné 185 % d'exposition : on retire le levier du moins bien noté d'abord
     assert par[1].levier == 2 and par[2].levier == 1 and "plafond" in par[2].motif_levier
-    assert par[5].levier == 1  # score 55 < 80
+    assert par[5].levier == 1  # score 55 < 70
     assert cible.exposition_brute <= 1.5 + 1e-9
     assert par[1].stop is not None and par[2].stop is None
 

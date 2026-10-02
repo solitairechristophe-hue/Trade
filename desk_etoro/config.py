@@ -64,7 +64,8 @@ class Allocation:
     """Construction du portefeuille cible et facteur de levier."""
     nb_lignes: int = 20
     score_min: float = 60.0
-    exposant_score: float = 2.0  # poids ∝ ((score − score_min)/(100 − score_min)) ** exposant / vol ** exposant_vol
+    score_plancher_poids: float = 50.0  # poids ∝ ((score − plancher)/(100 − plancher)) ** exposant_score
+    exposant_score: float = 1.5  # … / vol ** exposant_vol
     exposant_vol: float = 0.5
     poids_max: float = 0.10
     poids_min: float = 0.02
@@ -74,10 +75,10 @@ class Allocation:
     classes_exclues: tuple[str, ...] = ("currencies",)
     # Facteur multiplicateur (levier)
     levier_max: int = 2
-    score_levier: float = 85.0  # « haut score » : score minimal pour envisager le levier…
+    score_levier: float = 70.0  # « haut score » : score minimal pour envisager le levier…
     rang_max_levier: int = 10  # … et rang parmi les tickers notés
     vol_max_levier: float = 0.35  # volatilité annualisée maximale de l'actif
-    vol_cible_position: float = 0.50  # levier × vol ne dépasse pas ce niveau
+    vol_cible_position: float = 0.60  # levier × vol ne dépasse pas ce niveau (≈ vol des valeurs les plus nerveuses détenues sans levier)
     drawdown_max_levier: float = -0.25  # recul maximal depuis le plus haut 52 semaines
     classes_levier: tuple[str, ...] = ("stocks", "etf", "indices")
     exposition_brute_max: float = 1.5  # somme des poids × levier

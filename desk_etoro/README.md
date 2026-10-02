@@ -67,19 +67,25 @@ alors estimée par la hausse du montant investi sur 30 jours. Pour un ticker *i*
 - **qualité des détenteurs** : moyenne de Q (12 %) ;
 - **fraîcheur** : part du poids ouverte ou renforcée depuis moins de 30 jours (8 %).
 
-Les cotations d'un même titre sont regroupées avant le calcul : versions « séance régulière » `.RTH`
-et classes d'actions d'un même émetteur, comme GOOGL avec GOOG. Le score vaut 100 × la somme pondérée des rangs centiles. Il n'est calculé que pour les tickers détenus par
-au moins 3 portefeuilles votants.
+Les cotations d'un même titre sont regroupées avant le calcul : versions « séance régulière » `.RTH`,
+autres places de cotation (ASML.NV, GOOG.EUR, RACE.MI…) reconnues à leur nom, et classes d'actions
+d'un même émetteur, comme GOOGL avec GOOG.
+
+Chaque composante est ramenée sur [0, 1] entre son quantile 2 % et son maximum. Consensus, largeur et
+conviction sont pris en échelle logarithmique : un titre détenu par 60 % des votants se détache ainsi
+nettement d'un titre qui en réunit 20 %, alors qu'un rang centile les mettrait presque à égalité.
+Le score vaut 100 × la somme pondérée des composantes. Il n'est calculé que pour les tickers détenus
+par au moins 3 portefeuilles votants.
 
 ### 4. Portefeuille cible et facteur multiplicateur
 
 - **Sélection** : les 20 meilleurs scores ≥ 60, hors devises, en consensus acheteur, ouvrables sur le
   compte. Une ligne déjà détenue reste tant que son rang est ≤ 30 et son score ≥ 50 (hystérésis), pour
   éviter de tourner pour rien.
-- **Poids** : ((score − 60) / 40)² / volatilité^0,5. On pondère l'excédent de score au-dessus du seuil,
-  parce que les scores du haut de classement sont serrés. Chaque ligne pèse entre 2 % et 10 %, la crypto
-  15 % au plus au total, et 2 % restent en liquidités.
-- **Levier** : seulement pour une valeur à **haut score** (score ≥ 85 et rang ≤ 10 parmi tous les tickers
+- **Poids** : ((score − 50) / 50)^1,5 / volatilité^0,5, soit l'excédent de score au-dessus d'un
+  plancher. Chaque ligne pèse entre 2 % et 10 %, la crypto 15 % au plus au total, et 2 % restent en
+  liquidités.
+- **Levier** : seulement pour une valeur à **haut score** (score ≥ 70 et rang ≤ 10 parmi tous les tickers
   notés) et **adaptée au levier**. Il faut que toutes ces conditions soient remplies :
   - action, ETF ou indice ;
   - volatilité annuelle ≤ 35 % (calculée sur les bougies quotidiennes eToro) ;
@@ -88,7 +94,8 @@ au moins 3 portefeuilles votants.
   - levier proposé par eToro sur ce compte (`POST /api/v2/trading/info/eligibility`).
 
   Le multiplicateur est le plus grand levier permis, x2 au plus par défaut, tel que levier × volatilité
-  ≤ 50 %. L'exposition brute du portefeuille (Σ poids × levier) est plafonnée à 150 %. Au-delà, on retire
+  ≤ 60 %, soit à peu près la volatilité des valeurs les plus nerveuses que le portefeuille détient sans
+  levier. Sur actions, le levier eToro passe par un CFD, avec des frais de financement de nuit. L'exposition brute du portefeuille (Σ poids × levier) est plafonnée à 150 %. Au-delà, on retire
   d'abord le levier des lignes les moins bien notées.
 - **Stop** : une ligne à levier reçoit un stop (obligatoire chez eToro). Il est placé à 2,5 × la
   volatilité hebdomadaire, entre 8 % et 30 %, dans les bornes eToro exprimées en % de la marge.

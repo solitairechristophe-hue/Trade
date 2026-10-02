@@ -6,7 +6,9 @@ Pour un instrument i et des portefeuilles p de vote q_p (qualité ** exposant) e
   conviction     = Σ_{p détient i} q_p·w_p,i / Σ_{p détient i} q_p   poids moyen chez ses détenteurs
   qualité dét.   = moyenne des qualités des détenteurs
   fraîcheur      = part du poids des détenteurs ouverte depuis moins de N jours (si connue)
-Le score (0–100) pondère les rangs centiles de ces composantes parmi les tickers assez détenus.
+Le score (0–100) pondère ces composantes ramenées sur [0, 1] parmi les tickers assez détenus :
+échelle logarithmique pour consensus, largeur et conviction (de grandeurs très étalées), linéaire
+pour la qualité des détenteurs et la fraîcheur, chacune entre son quantile 2 % et son maximum.
 """
 from __future__ import annotations
 
@@ -83,17 +85,18 @@ def noter(portefeuilles: list[NotePortefeuille], cfg: Tickers) -> list[NoteTicke
         t.detenteurs.sort(key=lambda d: -abs(d[1]) * d[2])
 
     retenus = [t for t in notes.values() if t.nb_detenteurs >= cfg.detenteurs_min]
-    composantes = {
-        "consensus": (cfg.poids_consensus, {t.instrument_id: abs(t.consensus) for t in retenus}),
-        "largeur": (cfg.poids_largeur, {t.instrument_id: t.largeur for t in retenus}),
-        "conviction": (cfg.poids_conviction, {t.instrument_id: abs(t.conviction) for t in retenus}),
-        "qualite_detenteurs": (cfg.poids_qualite_detenteurs, {t.instrument_id: t.qualite_detenteurs for t in retenus}),
-        "fraicheur": (cfg.poids_fraicheur, {t.instrument_id: t.fraicheur for t in retenus}),
+    composantes = {  # nom : (poids, valeurs, échelle log)
+        "consensus": (cfg.poids_consensus, {t.instrument_id: abs(t.consensus) for t in retenus}, True),
+        "largeur": (cfg.poids_largeur, {t.instrument_id: t.largeur for t in retenus}, True),
+        "conviction": (cfg.poids_conviction, {t.instrument_id: abs(t.conviction) for t in retenus}, True),
+        "qualite_detenteurs": (cfg.poids_qualite_detenteurs,
+                               {t.instrument_id: t.qualite_detenteurs for t in retenus}, False),
+        "fraicheur": (cfg.poids_fraicheur, {t.instrument_id: t.fraicheur for t in retenus}, False),
     }
-    rangs = {nom: metriques.rang_percentile(vals) for nom, (_, vals) in composantes.items()}
+    rangs = {nom: metriques.echelle(vals, log) for nom, (_, vals, log) in composantes.items()}
     for t in retenus:
         total, poids_utiles = 0.0, 0.0
-        for nom, (poids, _) in composantes.items():
+        for nom, (poids, _, _) in composantes.items():
             r = rangs[nom].get(t.instrument_id)
             if r is None:  # fraîcheur inconnue : la composante est ignorée, les autres repondérées
                 continue
