@@ -253,3 +253,23 @@ def test_quota_journalier(tmp_path):
     etat.enregistrer("flow-2026-10-02-XYZ", "XYZ", "up", NOW - dt.timedelta(hours=1), 70, 10, 1, "")
     res = scan(cfg, FauxFeeds(), 8918.0, set(), NOW, etat, ecrire=False)
     assert res.retenus == [] and any("hors quota" in d for _, d in res.etudies)
+
+
+def test_evenement_mineur_non_risk_off():
+    ev = [{"event": "Factory Orders", "time": (NOW + dt.timedelta(minutes=30)).isoformat()}]
+    assert not build_regime([], {}, 1e9, ev, NOW).risk_off
+
+
+def test_debit_se_resserre_quand_la_prime_depasse_le_budget():
+    large = proposer(contexte(), "up", JOUR, min_dte=21, max_dte=50, max_premium=1e9)
+    etroit = proposer(contexte(), "up", JOUR, min_dte=21, max_dte=50, max_premium=80.0)
+    assert large is not None and etroit is not None
+    assert etroit.premium_per_contract <= 80.0 < large.premium_per_contract
+    assert etroit.width < large.width and etroit.width >= 0.5 * 1.2
+
+
+def test_credit_a_esperance_positive():
+    p = proposer(contexte(iv_rank=0.80), "up", JOUR, min_dte=21, max_dte=50, max_premium=400.0)
+    d = dimensionner(p, 65.0, 8918.0, risk_per_trade=0.02, max_premium_per_trade=0.03, max_contracts=5,
+                     risque_restant=891.0)
+    assert d is not None and d.ev > 0

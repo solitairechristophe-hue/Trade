@@ -82,7 +82,7 @@ class ScanConfig:
     cooldown_days: int = 3  # pas de nouveau ticket sur un titre déjà proposé récemment
 
     # Planification (heure de New York)
-    scan_hours: tuple[int, ...] = (9, 10, 11, 12, 13, 14, 15)
+    scan_hours: tuple[int, ...] = (10, 11, 12, 13, 14, 15)  # pas avant 10 h : cotations d'options stables
     scan_minute: int = 5
     seasonality_feeds: bool = True
 

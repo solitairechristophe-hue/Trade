@@ -22,14 +22,18 @@ déjà proposé aujourd'hui, ou proposé dans les 3 derniers jours.
 3. IBKR : `get_account_summary` (NAV = `net_liquidation`), `get_account_positions` (titres à exclure),
    `get_order_instructions` (instructions déjà créées : ne pas doubler).
 4. Heure de New York ; si le marché est fermé, le run produit quand même le rapport (données de la veille).
+   Avant 09:45, les cotations d'options UW sont celles de la veille : ne retenir un ticket qu'après re-cotation
+   des jambes chez IBKR (`get_price_snapshot`), sinon rapport seulement.
 
 ## 1. Régime de marché (flux globaux)
 
 - `get_market_tide` (pente de la dernière heure et niveau du jour : net call − net put premium) ;
 - `get_market_sector_tide` pour les secteurs des candidats ; `get_market_etf_tide` SPY et QQQ ;
 - `get_gex_levels` SPY et `get_greek_exposure_by_ticker` SPY (gamma positif = calme, négatif = nerveux) ;
-- `get_market_events` et `get_market_state` / `get_trading_states` : événement macro dans les 2 h → **risk-off**
-  (rapport seulement, aucun ticket) ; `get_yield_curve`, `get_central_bank_rates` si doute macro.
+- `get_market_events` et `get_market_state` / `get_trading_states` : événement macro **majeur** (FOMC, CPI, PCE, PPI,
+  NFP/emploi, PIB, ISM, ventes au détail, inscriptions au chômage) dans les 2 h → **risk-off** (rapport seulement,
+  aucun ticket) ; les publications de second rang (Factory Orders…) ne comptent pas ; `get_yield_curve`,
+  `get_central_bank_rates` si doute macro.
 
 Biais = 0,6 × pente du tide (tanh(Δ/50 M$)) + 0,4 × niveau (tanh(niveau/150 M$)), borné à ±1.
 
@@ -52,8 +56,10 @@ Garder les 10–15 titres les plus chauds (prime nette de flux × nombre de sour
 `get_company_info`, `get_ticker_ohlc_latest_or_date` + `get_ticker_candles_by_range` (60 j : SMA20/50, ATR14,
 volume moyen), `get_ticker_indicator_series` (RSI14), `get_gex_levels` (call wall / put wall), `get_greek_exposure_by_ticker`,
 `get_greek_flow_by_ticker`, `get_flow_per_strike`, `get_flow_per_expiry`, `get_open_interest_changes` (titre),
-`get_dark_pool_volume_price_group`, `get_short_data_by_ticker`, `get_max_pain`, `get_implied_volatility_term_structure`
-(IV rank), `get_earnings_history` / prochaine date de résultats, `get_insider_activity_by_ticker`,
+`get_dark_pool_volume_price_group`, `get_short_volume_ratio_by_ticker` et `get_short_screener` (short interest ;
+`get_short_data_by_ticker` ne donne que le taux d'emprunt), `get_max_pain`, `get_implied_volatility_term_structure`
+(IV rank), `get_earnings_history` / prochaine date de résultats, `get_insider_transactions` (`ticker_symbol`, codes P/S ;
+`get_insider_activity_by_ticker` ne liste pas les transactions),
 `get_institutional_ownership_by_ticker`, `get_average_return_per_month_by_ticker`, `get_analyst_ratings` (titre),
 puis la chaîne : `get_options_chain` / `get_chains_for_expiry` / `get_atm_chains` (bid, ask, delta, OI, volume).
 
@@ -68,12 +74,16 @@ Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18)), divisé par 2 en risk-off
 
 ## 5. Structure, niveaux, taille
 
-- Échéance 21–50 jours qui n'enjambe pas les résultats (sinon ≥ 10 j avant les résultats, sinon on passe).
-- IV rank < 55 % → **débit** : longue ~delta 0,50, courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR) ;
+- Échéances 21–50 jours qui n'enjambent pas les résultats (sinon ≥ 10 j avant les résultats, sinon on passe) :
+  construire la structure sur chaque échéance valide et garder celle au meilleur gain/risque.
+- IV rank < 55 % → **débit** : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR),
+  largeur entre 0,5 et 3 ATR ; si la prime dépasse 3 % de la NAV, resserrer la largeur (courte plus proche) avant
+  d'abandonner le titre ;
   limite = mid + 15 % du spread, plafond = limite × 1,07, TP = limite + 55 % × (largeur − limite),
   SL = 50 % de la limite ; prime = limite × 100 ; risque = (limite − SL) × 110.
 - IV rank ≥ 55 % → **crédit** (bull put / bear call) : courte ~delta 0,25, longue ≤ 2 ATR plus loin, crédit ≥ 20 % de
-  la largeur ; limite = mid − 15 % du spread, plafond = limite, TP = 50 % du crédit, SL = 2 × crédit ;
+  la largeur, largeur 0,5–2 ATR ; limite = mid − 15 % du spread, plafond = limite, TP = 50 % du crédit, SL = 1,5 × crédit
+  (à 2 × l'espérance est négative pour p ≤ 0,69) ;
   jambes décrites dans le sens débit, `side` = SELL.
 - Liquidité : spread ≤ max(0,10 ; 15 % du mid), OI ou volume ≥ 50.
 - Condition d'entrée : action ≥ prix + 0,15 ATR (hausse) / ≤ prix − 0,15 ATR (baisse) ; stop action = 1,5 ATR

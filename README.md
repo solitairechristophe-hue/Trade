@@ -40,7 +40,7 @@ sur la NAV IBKR et dépose le ticket dans `tickets/<date>-flow.json` : le robot 
 
 ```
 UW (REST : tide, secteurs, GEX, flow alerts, screeners, dark pool, OI, initiés, Congrès, analystes,
-    short interest, max pain, IV, saisonnalité, chaînes)  ──► scanner (9h05 … 15h05 NY)
+    short interest, max pain, IV, saisonnalité, chaînes)  ──► scanner (10h05 … 15h05 NY)
     ──► tickets/<date>-flow.json + reports/<date>-<heure>-flow.md ──► robot ──► IBKR
 ```
 
@@ -66,7 +66,8 @@ Sans IB Gateway joignable, la NAV vient de `NAV_USD`.
 **Depuis Claude** : le skill `/desk-flow` (`.claude/skills/desk-flow/SKILL.md`) exécute le même run avec les
 connecteurs Unusual Whales et IBKR, crée les **instructions d'ordre** dans IBKR (à soumettre dans l'app) et
 dépose tickets (`tickets/<date>-flow-ia.json`, desk `flow-ia`) et rapports (`reports/ia/`) dans le dépôt.
-Une Routine Claude peut le lancer toutes les heures de séance.
+Une Routine Claude peut le lancer toutes les heures de séance (elle doit être créée depuis l'interface Routines
+de claude.ai avec les connecteurs Unusual Whales et IBKR attachés). Premier run réel : `reports/ia/2026-10-02-0925-flow-ia.md`.
 
 ## Installation sur un VPS
 

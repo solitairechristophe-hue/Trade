@@ -1,8 +1,8 @@
 """Choix de la structure d'options et des niveaux (fonctions pures sur la chaîne cotée).
 
 Débit (défaut) : vertical acheté, jambe longue ~delta 0,50, jambe courte ~delta 0,25
-(ou au mur gamma s'il est dans la fourchette). Crédit (IV rank élevé) : vertical vendu,
-jambe courte ~delta 0,25, jambe longue plus loin. Les jambes sont toujours décrites dans
+(ou au mur gamma s'il est dans la fourchette), largeur 0,5 à 3 ATR, resserrée si la prime dépasse le budget. Crédit (IV rank élevé) : vertical vendu,
+jambe courte ~delta 0,25, jambe longue plus loin ; SL à 150 % du crédit. Les jambes sont toujours décrites dans
 le sens débit, comme l'exige le robot ; un crédit est la vente (side SELL) de ce combo.
 """
 from __future__ import annotations
@@ -79,11 +79,12 @@ def proposer(ctx: TickerContext, direction: str, today: dt.date, *, min_dte: int
              long_delta: float = 0.50, short_delta: float = 0.25, iv_rank_credit: float = 0.55,
              tp_fraction: float = 0.55, sl_fraction: float = 0.50, max_premium: float = 1e9
              ) -> Proposition | None:
-    """Construit la proposition pour le titre, ou None si aucune structure propre n'est possible."""
+    """Meilleure proposition (gain/risque) parmi les échéances valides, ou None si rien de propre n'est possible."""
     if not ctx.chain or not ctx.price:
         return None
     credit = ctx.iv_rank is not None and ctx.iv_rank >= iv_rank_credit
     atr = ctx.atr14 or ctx.price * 0.02
+    props = []
     for expiry in expiries_valides(ctx.chain, today, min_dte, max_dte, ctx.next_earnings):
         right = "call" if (direction == "up") != credit else "put"
         quotes = [q for q in ctx.chain if q.expiry == expiry and q.type == right]
@@ -91,8 +92,10 @@ def proposer(ctx: TickerContext, direction: str, today: dt.date, *, min_dte: int
             else _vertical_debit(ctx, direction, expiry, quotes, today, long_delta, short_delta, atr,
                                  tp_fraction, sl_fraction, max_premium)
         if p:
-            return p
-    return None
+            props.append(p)
+    if not props:
+        return None
+    return max(props, key=lambda p: (round(p.max_gain_per_contract / p.max_loss_per_contract, 2), -p.expiry.toordinal()))
 
 
 def _condition_et_stop(ctx: TickerContext, direction: str, atr: float) -> tuple[dict, float]:
@@ -111,25 +114,42 @@ def _condition_et_stop(ctx: TickerContext, direction: str, atr: float) -> tuple[
 
 def _vertical_debit(ctx, direction, expiry, quotes, today, long_delta, short_delta, atr,
                     tp_fraction, sl_fraction, max_premium) -> Proposition | None:
-    longue = _par_delta(quotes, long_delta)
-    if longue is None or not _liquide(longue):
-        return None
-    # jambe courte : delta cible, ou le mur gamma s'il tombe entre 0,8 et 2,5 ATR
-    cible = _par_delta(quotes, short_delta)
+    sens = 1 if direction == "up" else -1
+    longues: list[OptionQuote] = []
+    for d in (long_delta, max(0.35, long_delta - 0.10)):  # ATM d'abord, puis un peu plus loin si trop cher
+        q = _par_delta(quotes, d)
+        if q and _liquide(q) and q not in longues:
+            longues.append(q)
     mur = ctx.call_wall if direction == "up" else ctx.put_wall
-    if mur and 0.8 * atr <= abs(mur - ctx.price) <= 2.5 * atr:
-        proches = [q for q in quotes if (q.strike >= mur if direction == "up" else q.strike <= mur)]
-        if proches:
-            cible = min(proches, key=lambda q: abs(q.strike - mur))
-    if cible is None or not _liquide(cible) or cible.strike == longue.strike:
-        return None
-    if (direction == "up" and cible.strike < longue.strike) or (direction == "down" and cible.strike > longue.strike):
-        return None
-    width = abs(cible.strike - longue.strike)
-    mid = longue.mid - cible.mid
+    for longue in longues:
+        # jambes courtes possibles : au-delà de la longue, largeur entre 0,5 et 3 ATR
+        au_dela = [q for q in quotes if 0.5 * atr <= sens * (q.strike - longue.strike) <= 3 * atr and _liquide(q)]
+        if not au_dela:
+            continue
+        prefs: list[OptionQuote] = []
+        if mur and 0.8 * atr <= sens * (mur - ctx.price) <= 2.5 * atr:
+            prefs.append(min(au_dela, key=lambda q: abs(q.strike - mur)))  # courte au mur gamma
+        cible = _par_delta(au_dela, short_delta)
+        if cible:
+            prefs.append(cible)
+        prefs += sorted(au_dela, key=lambda q: -abs(q.strike - longue.strike))  # puis du plus large au plus étroit
+        vus: set[str] = set()
+        for courte in prefs:
+            if courte.symbol in vus:
+                continue
+            vus.add(courte.symbol)
+            p = _debit(ctx, direction, expiry, longue, courte, atr, tp_fraction, sl_fraction, max_premium)
+            if p:
+                return p
+    return None
+
+
+def _debit(ctx, direction, expiry, longue, courte, atr, tp_fraction, sl_fraction, max_premium) -> Proposition | None:
+    width = abs(courte.strike - longue.strike)
+    mid = longue.mid - courte.mid
     if mid <= 0.05 or mid >= 0.8 * width:
         return None  # trop cher pour le gain possible
-    limit = _arrondi_haut(mid + 0.15 * (longue.spread + cible.spread) / 2)
+    limit = _arrondi_haut(mid + 0.15 * (longue.spread + courte.spread) / 2)
     if limit * 100 > max_premium:
         return None
     cap = _arrondi_haut(limit * 1.07)
@@ -139,11 +159,10 @@ def _vertical_debit(ctx, direction, expiry, quotes, today, long_delta, short_del
         return None
     cond, stop = _condition_et_stop(ctx, direction, atr)
     strat = "bull call spread" if direction == "up" else "bear put spread"
+    right = "C" if direction == "up" else "P"
     legs = (
-        {"expiry": expiry.strftime("%Y%m%d"), "strike": longue.strike, "right": "C" if direction == "up" else "P",
-         "action": "BUY", "ratio": 1},
-        {"expiry": expiry.strftime("%Y%m%d"), "strike": cible.strike, "right": "C" if direction == "up" else "P",
-         "action": "SELL", "ratio": 1},
+        {"expiry": expiry.strftime("%Y%m%d"), "strike": longue.strike, "right": right, "action": "BUY", "ratio": 1},
+        {"expiry": expiry.strftime("%Y%m%d"), "strike": courte.strike, "right": right, "action": "SELL", "ratio": 1},
     )
     return Proposition(
         symbol=ctx.ticker, direction=direction, side="BUY", strategy=strat, legs=legs, expiry=expiry,
@@ -152,7 +171,7 @@ def _vertical_debit(ctx, direction, expiry, quotes, today, long_delta, short_del
         max_loss_per_contract=round((limit - sl) * 100 * 1.10, 2),
         max_gain_per_contract=round((tp - limit) * 100, 2),
         condition=cond, underlying_stop=stop, time_exit=expiry - dt.timedelta(days=7),
-        note=f"{strat} {longue.strike}/{cible.strike} {expiry.isoformat()} (débit, mid {mid:.2f})",
+        note=f"{strat} {longue.strike}/{courte.strike} {expiry.isoformat()} (débit, mid {mid:.2f})",
     )
 
 
@@ -162,7 +181,7 @@ def _vertical_credit(ctx, direction, expiry, quotes, today, short_delta, atr, ma
     if courte is None or not _liquide(courte):
         return None
     plus_loin = [q for q in quotes if (q.strike < courte.strike if direction == "up" else q.strike > courte.strike)]
-    plus_loin = [q for q in plus_loin if abs(q.strike - courte.strike) <= 2 * atr and _liquide(q)]
+    plus_loin = [q for q in plus_loin if 0.5 * atr <= abs(q.strike - courte.strike) <= 2 * atr and _liquide(q)]
     if not plus_loin:
         return None
     longue = max(plus_loin, key=lambda q: abs(q.strike - courte.strike))
@@ -175,7 +194,7 @@ def _vertical_credit(ctx, direction, expiry, quotes, today, short_delta, atr, ma
     if marge > max_premium:
         return None
     tp = _arrondi(limit * 0.5)
-    sl = _arrondi_haut(limit * 2.0)
+    sl = _arrondi_haut(limit * 1.5)  # à 200 %, l'espérance serait négative pour p ≤ 0,69
     if not tp < limit < sl:
         return None
     cond, stop = _condition_et_stop(ctx, direction, atr)

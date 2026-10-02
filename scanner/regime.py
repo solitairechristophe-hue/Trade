@@ -41,10 +41,25 @@ def sector_biases(sector_points: dict[str, list[dict]]) -> dict[str, float]:
     return {s: round(0.5 * tide_bias(p) + 0.5 * level_bias(p), 3) for s, p in sector_points.items() if p}
 
 
+EVENEMENTS_MAJEURS = ("fomc", "fed ", "federal reserve", "rate decision", "interest rate", "powell", "cpi",
+                      "consumer price", "pce", "nonfarm", "non-farm", "payroll", "employment report", "jobs report",
+                      "gdp", "ppi", "producer price", "ism ", "retail sales", "jobless claims")
+
+
+def evenement_majeur(e: dict) -> bool:
+    imp = str(e.get("importance") or e.get("impact") or "").lower()
+    if imp in ("high", "3", "major"):
+        return True
+    nom = str(e.get("event") or e.get("name") or e.get("title") or "").lower()
+    return any(k in nom for k in EVENEMENTS_MAJEURS)
+
+
 def events_within(events: list[dict], now: dt.datetime, hours: float = 2.0) -> list[str]:
-    """Événements macro (FOMC, CPI, NFP…) à venir dans les prochaines heures."""
+    """Événements macro majeurs (FOMC, CPI, NFP, PIB…) à venir dans les prochaines heures."""
     out = []
     for e in events:
+        if not evenement_majeur(e):
+            continue
         t = e.get("time") or e.get("datetime") or e.get("date")
         if not t:
             continue
