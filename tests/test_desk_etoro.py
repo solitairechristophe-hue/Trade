@@ -374,6 +374,9 @@ def test_collecteur_pagination_cache_et_erreurs(tmp_path):
     hors_ligne = Collecteur(Snapshot(tmp_path), None, JOUR)
     assert len(hors_ligne.classement("OneYearAgo")) == 3 and hors_ligne.instruments([1, 2]).keys() == {1}
     assert hors_ligne.gains("Z") == []
+    Snapshot(tmp_path).ecrire("gains/Y", {"gains": [{"date": "2026-09-01", "gain": 0.02}, {"date": "2026-08-01", "gain": 0.01},
+                                                   {"date": "2026-10-01", "gain": 0.0}]})
+    assert hors_ligne.gains("Y") == [("2026-08-01", 0.01), ("2026-09-01", 0.02)]
     assert len(fc.appels) == n
 
 

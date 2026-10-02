@@ -110,7 +110,9 @@ class Collecteur:
             f"/api/v2/portfolios/{username}/gain/{granularite}", {"count": nb}))
         if not rep:
             return []
-        points = [(g["date"], float(g["gain"])) for g in rep.get("gains") or [] if g.get("gain") is not None]
+        mois_courant = self.jour.replace(day=1).isoformat()  # mois en cours : incomplet, ignoré
+        points = [(g["date"][:10], float(g["gain"])) for g in rep.get("gains") or []
+                  if g.get("gain") is not None and g["date"][:10] < mois_courant]
         return sorted(points)
 
     # -- Instruments --------------------------------------------------------------------------
