@@ -112,7 +112,8 @@ class FauxFeeds:
 
 def cfg_test(tmp_path, **k):
     base = dict(tickets_dir=tmp_path / "tickets", reports_dir=tmp_path / "reports",
-                state_file=tmp_path / "scanner.sqlite", kill_switch_file=tmp_path / "STOP", nav_usd=8918.0)
+                state_file=tmp_path / "scanner.sqlite", kill_switch_file=tmp_path / "STOP", nav_usd=8918.0,
+                calibration_file=tmp_path / "calibration.json")
     base.update(k)
     return ScanConfig(**base)
 
@@ -317,3 +318,11 @@ def test_calibration(tmp_path):
     assert charger_calibration(f) == (0.5, 0.7)  # borné à 0,70
     assert probabilite(100, (0.5, 0.7)) == 0.7 and probabilite(0) == 0.38
     assert charger_calibration(tmp_path / "absent.json") is None
+
+
+def test_calibration_sans_avantage_bloque_les_trades(tmp_path):
+    cfg = cfg_test(tmp_path)
+    cfg.calibration_file.write_text(json.dumps({"p_min": 0.243, "p_max": 0.259}))
+    res = scan(cfg, FauxFeeds(), 8918.0, set(), NOW, ecrire=False)
+    assert res.retenus == [] and any("espérance négative" in d for _, d in res.etudies)
+    assert res.feeds["calibration de p"].startswith("0.30")
