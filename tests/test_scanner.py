@@ -166,7 +166,7 @@ def test_vertical_debit_haussier():
     assert p.stop_loss < p.limit_price < p.take_profit <= p.width
     assert p.premium_per_contract <= 267.0
     assert p.condition == {"op": ">=", "price": round(50 + 0.15 * 1.2, 2)}
-    assert p.underlying_stop < 50 and p.time_exit == dt.date(2026, 11, 13)
+    assert p.underlying_stop < 50 and p.time_exit == dt.date(2026, 10, 12)  # J+10, avant échéance − 7 j
 
 
 def test_vertical_credit_quand_iv_riche():
@@ -273,3 +273,47 @@ def test_credit_a_esperance_positive():
     d = dimensionner(p, 65.0, 8918.0, risk_per_trade=0.02, max_premium_per_trade=0.03, max_contracts=5,
                      risque_restant=891.0)
     assert d is not None and d.ev > 0
+
+
+# --- horizon, liquidité, flux lié aux résultats, calibration ---------------------
+
+def test_sortie_temps_horizon_court():
+    from scanner.structure import sortie_temps
+    assert sortie_temps(JOUR, dt.date(2026, 11, 20), 10) == dt.date(2026, 10, 12)
+    assert sortie_temps(JOUR, dt.date(2026, 10, 16), 10) == dt.date(2026, 10, 9)
+
+
+def test_flux_avant_resultats_compte_moitie():
+    from scanner.scoring import poids_alerte
+    assert poids_alerte(alerte(next_earnings=dt.date(2026, 11, 15))) == 0.5  # échéance 20/11, 5 j après
+    assert poids_alerte(alerte(next_earnings=dt.date(2026, 12, 15))) == 1.0
+    assert poids_alerte(alerte()) == 1.0
+
+
+def test_liquidite_relative():
+    from scanner.scoring import facteur_liquidite
+    liquide = contexte(options_volume=60_000, stock_volume=2_000_000, marketcap=20e9)  # O/S 3
+    lourd = contexte(options_volume=50_000, stock_volume=80_000_000, marketcap=3000e9)  # O/S 0,06, méga-cap
+    assert facteur_liquidite(liquide) > 0.9 and facteur_liquidite(lourd) < -0.5
+
+
+def test_calibration(tmp_path):
+    from scanner.calibrate import calibrer, evaluer, signaux_du_jour, wilson
+    from scanner.sizing import charger_calibration, probabilite
+    sig = signaux_du_jour([alerte(), alerte(ticker="BAD", type="put", premium=900_000, ask=900_000)], 10, 100_000)
+    assert ("ACME", 1, 800_000) in sig and sig[0][0] == "BAD" and sig[0][1] == -1
+    jours = [dt.date(2026, 8, 1) + dt.timedelta(days=i) for i in range(30)]
+    hausse = [{"date": d, "open": 50 + i, "high": 51 + i, "low": 49 + i, "close": 50 + i} for i, d in enumerate(jours)]
+    plat = [{"date": d, "open": 50, "high": 51, "low": 49, "close": 50} for d in jours]
+    r = evaluer([(jours[20], "UP", 1, 2.0), (jours[20], "FLAT", 1, 1.0), (jours[29], "UP", 1, 1.0)],
+                {"UP": hausse, "FLAT": plat}, hold=5, seuil_atr=1.0)
+    assert r == [(2.0, True), (1.0, False)]  # le dernier signal n'a pas encore d'issue
+    c = calibrer(r, 5, 1.0, 20)
+    assert c["p_min"] == 0.5 and c["p_max"] == 1.0 and c["n"] == 2
+    lo, hi = wilson(50, 100)
+    assert lo < 0.5 < hi
+    f = tmp_path / "calibration.json"
+    f.write_text(json.dumps(c))
+    assert charger_calibration(f) == (0.5, 0.7)  # borné à 0,70
+    assert probabilite(100, (0.5, 0.7)) == 0.7 and probabilite(0) == 0.38
+    assert charger_calibration(tmp_path / "absent.json") is None

@@ -128,6 +128,8 @@ class TickerContext:
     sma20: float = 0.0
     sma50: float = 0.0
     avg_volume: float = 0.0
+    options_volume: float = 0.0  # contrats du jour (calls + puts)
+    stock_volume: float = 0.0  # actions du jour
     sector: str = ""
     marketcap: float = 0.0
     next_earnings: dt.date | None = None

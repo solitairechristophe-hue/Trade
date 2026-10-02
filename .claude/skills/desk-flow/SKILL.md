@@ -121,10 +121,14 @@ puis la chaîne : `get_options_chain` / `get_chains_for_expiry` / `get_atm_chain
 
 Facteurs directionnels (−1..+1) × poids : flux 3 (tanh(net/1,5 M$)), screener 1,5, net premium du jour 1,5,
 variations d'OI 1, initiés 1, Congrès 0,5, analystes 0,5, tendance 1,5 (prix vs SMA20/50).
-Direction = signe de la somme. Confirmations × poids : qualité du flux 1 (sweeps, fills ascendants, vol > OI,
-ouverture), dark pool 1, murs gamma 1, short interest 0,5, saisonnalité 0,5, accord avec le régime 2
+Le flux est pondéré : une alerte dont l'échéance tombe 0 à 10 jours après les prochains résultats compte pour
+moitié (les achats d'options informent avant les événements imprévus, pas avant les événements programmés).
+Direction = signe de la somme. Confirmations × poids : qualité du flux 1 (sweeps, blocs « floor », fills
+ascendants, vol > OI, ouverture), liquidité relative 0,75 (ratio O/S = contrats du jour × 100 / actions du jour :
+tanh((O/S − 0,15)/0,15), −0,5 au-delà de 500 Md$ de capitalisation, −0,25 au-delà de 200 Md$ ; la prévisibilité
+est forte quand l'option est liquide et l'action peu liquide), dark pool 1, murs gamma 1, short interest 0,5, saisonnalité 0,5, accord avec le régime 2
 (biais marché/secteur × direction), résultats −1 (≤ 3 j) ou −0,4 (dans la fenêtre).
-Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18)), divisé par 2 en risk-off. Seuil : **55**.
+Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18,75)), divisé par 2 en risk-off. Seuil : **55**.
 
 ## 5. Structure, niveaux, taille
 
@@ -133,7 +137,7 @@ Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18)), divisé par 2 en risk-off
 - IV rank < 55 % → **débit** : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR),
   largeur entre 0,5 et 3 ATR ; si la prime dépasse 3 % de la NAV, resserrer la largeur (courte plus proche) avant
   d'abandonner le titre ;
-  limite = mid + 15 % du spread, plafond = limite × 1,07, TP = limite + 55 % × (largeur − limite),
+  limite = mid + 15 % du spread, plafond = limite × 1,07, TP = limite + 45 % × (largeur − limite),
   SL = 50 % de la limite ; prime = limite × 100 ; risque = (limite − SL) × 110.
 - IV rank ≥ 55 % → **crédit** (bull put / bear call) : courte ~delta 0,25, longue ≤ 2 ATR plus loin, crédit ≥ 20 % de
   la largeur, largeur 0,5–2 ATR ; limite = mid − 15 % du spread, plafond = limite, TP = 50 % du crédit, SL = 1,5 × crédit
@@ -141,9 +145,11 @@ Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18)), divisé par 2 en risk-off
   jambes décrites dans le sens débit, `side` = SELL.
 - Liquidité : spread ≤ max(0,10 ; 15 % du mid), OI ou volume ≥ 50.
 - Condition d'entrée : action ≥ prix + 0,15 ATR (hausse) / ≤ prix − 0,15 ATR (baisse) ; stop action = 1,5 ATR
-  (ou juste au-delà du mur gamma) ; sortie temps = échéance − 7 j.
+  (ou juste au-delà du mur gamma) ; **sortie temps = run + 10 jours calendaires (~7 séances)**, jamais après
+  échéance − 7 j : la recherche trouve l'effet du flux sur quelques jours à une semaine, pas au-delà.
 - Quantité = min(2 % NAV / risque par combo, 3 % NAV / prime par combo (débit), 5) ; 0 → écarté.
-- p(gain) = 0,38 + 0,24 × score/100 ; EV = p × gain TP − (1 − p) × perte SL ; **classer par EV / $ risqué**,
+- p(gain) = p_min + (p_max − p_min) × score/100, avec p_min et p_max mesurés par la calibration
+  (`reports/calibration.md`, `scanner/calibration.json`) ; à défaut 0,38 et 0,62 ; EV = p × gain TP − (1 − p) × perte SL ; **classer par EV / $ risqué**,
   garder au plus 3 (et le quota journalier restant), EV > 0 seulement.
 
 ## 6. Vérification et instructions IBKR

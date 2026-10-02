@@ -7,4 +7,6 @@ __pycache__/
 reports/*
 !reports/README.md
 !reports/ia/
+!reports/calibration.md
+!reports/calibration-signaux.csv
 *.zip

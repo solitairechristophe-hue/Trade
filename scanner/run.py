@@ -14,7 +14,7 @@ from .model import Regime
 from .output import ecrire_rapport, ecrire_tickets, rapport_markdown, ticket_id, vers_ticket
 from .regime import build_regime
 from .scoring import Candidate, noter, preselection, regrouper
-from .sizing import Dimensionnee, classer, dimensionner
+from .sizing import Dimensionnee, charger_calibration, classer, dimensionner
 from .state import EtatScanner
 from .structure import proposer
 
@@ -117,6 +117,8 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
     notes.sort(key=lambda c: c.score, reverse=True)
 
     # 5. structure, sizing, classement
+    calib = charger_calibration(cfg.calibration_file)
+    res.feeds["calibration de p"] = f"{calib[0]:.2f}–{calib[1]:.2f} (mesurée)" if calib else "défaut 0,38–0,62 (non mesurée)"
     quota_jour = cfg.max_new_orders_per_day - (etat.tickets_du_jour(today) if etat else 0)
     budget_risque_total = nav * cfg.max_total_risk
     dims: list[tuple[Candidate, Dimensionnee]] = []
@@ -137,13 +139,14 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
         prop = proposer(ctx, c.direction, today, min_dte=cfg.min_dte, max_dte=cfg.max_dte,
                         long_delta=cfg.long_delta, short_delta=cfg.short_delta, iv_rank_credit=cfg.iv_rank_credit,
                         tp_fraction=cfg.tp_fraction, sl_fraction=cfg.sl_fraction,
-                        max_premium=nav * cfg.max_premium_per_trade if nav > 0 else 1e9)
+                        max_premium=nav * cfg.max_premium_per_trade if nav > 0 else 1e9,
+                        hold_days=cfg.hold_days)
         if prop is None:
             res.etudies.append((c, "écarté : aucune structure liquide/abordable dans la fenêtre d'échéances"))
             continue
         d = dimensionner(prop, c.score, nav, risk_per_trade=cfg.risk_per_trade,
                          max_premium_per_trade=cfg.max_premium_per_trade, max_contracts=cfg.max_contracts_per_order,
-                         risque_restant=budget_risque_total)
+                         risque_restant=budget_risque_total, calib=calib)
         if d is None:
             res.etudies.append((c, "écarté : risque par contrat > budget (2 % de la NAV)"))
             continue

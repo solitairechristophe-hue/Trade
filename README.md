@@ -54,8 +54,11 @@ UW (REST : tide, secteurs, GEX, flow alerts, screeners, dark pool, OI, initiés,
    analystes, initiés, saisonnalité, chaîne cotée) ;
 4. **Score** 0–100 (poids dans `scanner/scoring.py`), direction, seuil 55 ;
 5. **Structure** : vertical débit (IV rank < 55 %) ou crédit (≥ 55 %), échéance 21–50 j hors résultats,
-   limite/plafond/TP/SL, condition d'entrée sur l'action, stop action, sortie temps ;
-6. **Taille** dans les garde-fous du robot, classement par **EV / $ risqué**, au plus 3 tickets par scan
+   limite/plafond/TP/SL, condition d'entrée sur l'action, stop action, sortie temps à 10 jours (l'effet du flux
+   d'options sur l'action se mesure sur quelques jours à une semaine) ;
+6. **Taille** dans les garde-fous du robot, probabilité de gain calibrée sur l'historique
+   (`python -m scanner.calibrate`, résultat dans `scanner/calibration.json` et `reports/calibration.md`),
+   classement par **EV / $ risqué**, au plus 3 tickets par scan
    et 3 ordres par jour ; délai de carence de 3 jours par titre ; jamais un titre déjà en position.
 
 Configuration : `UW_TOKEN` (obligatoire) et les variables `MIN_SCORE`, `MAX_TICKETS_PER_RUN`, `LOOKBACK_MINUTES`,

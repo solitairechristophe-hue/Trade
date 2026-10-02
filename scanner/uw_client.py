@@ -131,11 +131,14 @@ class UwClient:
         return self._liste("/api/market/top-net-impact", {"limit": 50, "issue_types[]": ["Common Stock", "ADR", "ETF"]})
 
     # --- flux de candidats ----------------------------------------------------------
-    def flow_alerts(self, newer_than: dt.datetime) -> list[FlowAlert]:
+    def flow_alerts(self, newer_than: dt.datetime, older_than: dt.datetime | None = None,
+                    limit: int = 200) -> list[FlowAlert]:
         rows = self._liste("/api/option-trades/flow-alerts", {
             "newer_than": newer_than.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
+            "older_than": older_than.astimezone(dt.timezone.utc).isoformat(timespec="seconds") if older_than else None,
+            "order": "premium" if older_than else None,
             "min_premium": int(self.cfg.min_premium_alert), "min_dte": 5, "max_dte": 90,
-            "issue_types[]": list(self.cfg.issue_types), "limit": 200,
+            "issue_types[]": list(self.cfg.issue_types), "limit": limit,
         })
         out = []
         for r in rows:
@@ -259,6 +262,8 @@ class UwClient:
                 ctx.net_call_premium = _f(_g(r, "net_call_premium"))
                 ctx.net_put_premium = _f(_g(r, "net_put_premium"))
                 ctx.avg_volume = _f(_g(r, "avg30_volume", "avg_30_day_volume", "stock_volume"))
+                ctx.options_volume = _f(_g(r, "call_volume")) + _f(_g(r, "put_volume"))
+                ctx.stock_volume = _f(_g(r, "stock_volume"))
                 ctx.sector = str(_g(r, "sector", defaut="") or "")
                 ctx.next_earnings = _date(_g(r, "next_earnings_date", "earnings_date"))
                 ctx.insider_buy_value_30d = _f(_g(r, "insider_buy_volume3m")) * ctx.price if _g(r, "insider_buy_volume3m") else 0.0
@@ -404,3 +409,10 @@ class UwClient:
                 continue
             essai(nom, fn)
         return ctx
+
+    def daily_candles(self, ticker: str, limit: int = 120) -> list[dict]:
+        """Bougies journalières triées dans le temps : {date, open, high, low, close}."""
+        rows = self._liste(f"/api/stock/{ticker}/ohlc/1d", {"limit": limit})
+        out = [{"date": _date(_g(r, "date", "start_time")), "open": _f(_g(r, "open")), "high": _f(_g(r, "high")),
+                "low": _f(_g(r, "low")), "close": _f(_g(r, "close"))} for r in rows]
+        return sorted([c for c in out if c["date"] and c["close"]], key=lambda c: c["date"])

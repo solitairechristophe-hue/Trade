@@ -77,8 +77,8 @@ def _liquide(q: OptionQuote) -> bool:
 
 def proposer(ctx: TickerContext, direction: str, today: dt.date, *, min_dte: int, max_dte: int,
              long_delta: float = 0.50, short_delta: float = 0.25, iv_rank_credit: float = 0.55,
-             tp_fraction: float = 0.55, sl_fraction: float = 0.50, max_premium: float = 1e9
-             ) -> Proposition | None:
+             tp_fraction: float = 0.45, sl_fraction: float = 0.50, max_premium: float = 1e9,
+             hold_days: int = 10) -> Proposition | None:
     """Meilleure proposition (gain/risque) parmi les échéances valides, ou None si rien de propre n'est possible."""
     if not ctx.chain or not ctx.price:
         return None
@@ -92,10 +92,21 @@ def proposer(ctx: TickerContext, direction: str, today: dt.date, *, min_dte: int
             else _vertical_debit(ctx, direction, expiry, quotes, today, long_delta, short_delta, atr,
                                  tp_fraction, sl_fraction, max_premium)
         if p:
-            props.append(p)
+            props.append(_avec_sortie(p, today, hold_days))
     if not props:
         return None
     return max(props, key=lambda p: (round(p.max_gain_per_contract / p.max_loss_per_contract, 2), -p.expiry.toordinal()))
+
+
+def sortie_temps(today: dt.date, expiry: dt.date, hold_days: int) -> dt.date:
+    """Sortie temps : horizon court (le flux d'options prédit les rendements sur quelques jours à une semaine),
+    jamais après échéance − 7 jours."""
+    return min(today + dt.timedelta(days=hold_days), expiry - dt.timedelta(days=7))
+
+
+def _avec_sortie(p: Proposition, today: dt.date, hold_days: int) -> Proposition:
+    from dataclasses import replace
+    return replace(p, time_exit=sortie_temps(today, p.expiry, hold_days))
 
 
 def _condition_et_stop(ctx: TickerContext, direction: str, atr: float) -> tuple[dict, float]:
