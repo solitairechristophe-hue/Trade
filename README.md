@@ -1,4 +1,4 @@
-# Robot d'exécution IBKR des desks
+# Robot d'exécution IBKR des desks + Desk Flow (Unusual Whales)
 
 Exécute **automatiquement** dans IBKR les tickets produits par les desks
 (Desk Swing Options, Desk Stock Scanner) : entrée conditionnelle, TP, SL,
@@ -31,6 +31,42 @@ VPS : robot (Python, ib_async) ◄──► IB Gateway + IBC (Docker) ◄──�
 
 Le SL est surveillé par le robot et non posé chez IBKR, car les ordres stop sur combos
 d'options y sont peu fiables. **Si le robot est arrêté, le SL n'est plus surveillé** (le TP, lui, reste chez IBKR).
+
+## Desk Flow : opportunités horaires Unusual Whales → ordres IBKR
+
+Le **scanner** (`scanner/`) interroge toutes les heures l'API Unusual Whales, note les titres par
+confluence, construit le spread d'options le plus rentable (espérance par dollar risqué), le dimensionne
+sur la NAV IBKR et dépose le ticket dans `tickets/<date>-flow.json` : le robot ci-dessus l'exécute.
+
+```
+UW (REST : tide, secteurs, GEX, flow alerts, screeners, dark pool, OI, initiés, Congrès, analystes,
+    short interest, max pain, IV, saisonnalité, chaînes)  ──► scanner (9h05 … 15h05 NY)
+    ──► tickets/<date>-flow.json + reports/<date>-<heure>-flow.md ──► robot ──► IBKR
+```
+
+À chaque scan :
+1. **Régime** : market tide (pente 1 h + niveau), tide des 11 secteurs, gamma SPY, calendrier macro
+   (événement dans les 2 h → risk-off : rapport seulement) ;
+2. **Candidats** : flow alerts (90 min), hottest chains haussiers/baissiers, dark pool ≥ 5 M$, OI changes,
+   initiés, Congrès ; univers actions/ADR/ETF ≥ 2 Md$, prix 8–1 500 $ ;
+3. **Enrichissement** des 15 titres les plus chauds (15 flux par titre : prix/ATR/SMA, murs gamma,
+   exposition gamma, net premium, OI du titre, dark pool du titre, short interest, max pain, IV rank,
+   analystes, initiés, saisonnalité, chaîne cotée) ;
+4. **Score** 0–100 (poids dans `scanner/scoring.py`), direction, seuil 55 ;
+5. **Structure** : vertical débit (IV rank < 55 %) ou crédit (≥ 55 %), échéance 21–50 j hors résultats,
+   limite/plafond/TP/SL, condition d'entrée sur l'action, stop action, sortie temps ;
+6. **Taille** dans les garde-fous du robot, classement par **EV / $ risqué**, au plus 3 tickets par scan
+   et 3 ordres par jour ; délai de carence de 3 jours par titre ; jamais un titre déjà en position.
+
+Configuration : `UW_TOKEN` (obligatoire) et les variables `MIN_SCORE`, `MAX_TICKETS_PER_RUN`, `LOOKBACK_MINUTES`,
+`MIN_DTE`/`MAX_DTE`, `IV_RANK_CREDIT`, `EXCLUDE_SYMBOLS`… de `.env.example`. Un scan manuel :
+`docker compose run --rm scanner python -m scanner.main --once`. Rapport du dernier scan : `reports/dernier-flow.md`.
+Sans IB Gateway joignable, la NAV vient de `NAV_USD`.
+
+**Depuis Claude** : le skill `/desk-flow` (`.claude/skills/desk-flow/SKILL.md`) exécute le même run avec les
+connecteurs Unusual Whales et IBKR, crée les **instructions d'ordre** dans IBKR (à soumettre dans l'app) et
+dépose tickets (`tickets/<date>-flow-ia.json`, desk `flow-ia`) et rapports (`reports/ia/`) dans le dépôt.
+Une Routine Claude peut le lancer toutes les heures de séance.
 
 ## Installation sur un VPS
 
@@ -69,7 +105,7 @@ une fois le robot en réel, sinon le trade serait pris deux fois.
 ## Développement
 
 ```
-pip install ib_async pytest
+pip install -r requirements.txt pytest
 python -m pytest -q tests
 ```
 

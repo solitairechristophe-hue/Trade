@@ -1,5 +1,5 @@
-# Robot d'exécution IBKR : IB Gateway (avec IBC pour la connexion automatique) + robot.
-# Lancer : docker compose up -d --build     Journal : docker compose logs -f robot
+# Robot d'exécution IBKR : IB Gateway (avec IBC pour la connexion automatique) + robot + scanner Desk Flow.
+# Lancer : docker compose up -d --build     Journal : docker compose logs -f robot scanner
 services:
   ib-gateway:
     image: ghcr.io/gnzsnz/ib-gateway:stable
@@ -31,4 +31,22 @@ services:
       KILL_SWITCH_FILE: /data/STOP
     volumes:
       - ./tickets:/tickets:ro
+      - ./data:/data
+
+  # Desk Flow : scanner horaire Unusual Whales (100 % API REST) → tickets/<date>-flow.json → robot.
+  scanner:
+    build: .
+    command: ["python", "-m", "scanner.main"]
+    restart: always
+    depends_on: [ib-gateway]
+    env_file: .env
+    environment:
+      IB_HOST: ib-gateway
+      TICKETS_DIR: /tickets
+      REPORTS_DIR: /reports
+      SCANNER_STATE_FILE: /data/scanner.sqlite
+      KILL_SWITCH_FILE: /data/STOP
+    volumes:
+      - ./tickets:/tickets
+      - ./reports:/reports
       - ./data:/data
