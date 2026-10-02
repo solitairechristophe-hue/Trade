@@ -15,10 +15,25 @@
       "max_loss": 114.4,
       "premium": 208,
       "legs": [
-        {"expiry": "20261120", "strike": 26, "right": "C", "action": "BUY", "ratio": 1},
-        {"expiry": "20261120", "strike": 29, "right": "C", "action": "SELL", "ratio": 1}
+        {
+          "expiry": "20261120",
+          "strike": 26,
+          "right": "C",
+          "action": "BUY",
+          "ratio": 1
+        },
+        {
+          "expiry": "20261120",
+          "strike": 29,
+          "right": "C",
+          "action": "SELL",
+          "ratio": 1
+        }
       ],
-      "condition": {"op": ">=", "price": 25.92},
+      "condition": {
+        "op": ">=",
+        "price": 25.92
+      },
       "underlying_stop": 23.9,
       "time_exit": "2026-11-13",
       "note": "bull call spread 26/29 2026-11-20 (debit, mid UW ajuste 1.02, score 67.7, p 0.542, EV +63.6 $). Jambes non verifiees sur IBKR (connecteur a re-authentifier)."
@@ -36,13 +51,64 @@
       "max_loss": 126.5,
       "premium": 230,
       "legs": [
-        {"expiry": "20261120", "strike": 70, "right": "P", "action": "BUY", "ratio": 1},
-        {"expiry": "20261120", "strike": 69, "right": "P", "action": "SELL", "ratio": 1}
+        {
+          "expiry": "20261120",
+          "strike": 70,
+          "right": "P",
+          "action": "BUY",
+          "ratio": 1
+        },
+        {
+          "expiry": "20261120",
+          "strike": 69,
+          "right": "P",
+          "action": "SELL",
+          "ratio": 1
+        }
       ],
-      "condition": {"op": "<=", "price": 70.5},
+      "condition": {
+        "op": "<=",
+        "price": 70.5
+      },
       "underlying_stop": 72.58,
       "time_exit": "2026-11-13",
       "note": "bear put spread 70/69 2026-11-20 (debit, courte au mur gamma 69.5, mid UW ajuste 0.44, score 71.1, p 0.551, EV +23.1 $). Jambes non verifiees sur IBKR (connecteur a re-authentifier)."
+    },
+    {
+      "id": "flow-ia-2026-10-02-CRWV",
+      "symbol": "CRWV",
+      "direction": "up",
+      "side": "BUY",
+      "quantity": 1,
+      "limit_price": 2.48,
+      "price_cap": 2.66,
+      "take_profit": 4.97,
+      "stop_loss": 1.24,
+      "max_loss": 136.4,
+      "premium": 248,
+      "legs": [
+        {
+          "expiry": "20261030",
+          "strike": 93,
+          "right": "C",
+          "action": "BUY",
+          "ratio": 1
+        },
+        {
+          "expiry": "20261030",
+          "strike": 100,
+          "right": "C",
+          "action": "SELL",
+          "ratio": 1
+        }
+      ],
+      "condition": {
+        "op": ">=",
+        "price": 91.71
+      },
+      "underlying_stop": 80.56,
+      "time_exit": "2026-10-23",
+      "note": "bull call spread 93/100 2026-10-30 (debit, mid UW 2.43 theo, score 77.9, p 0.567, EV +82 $). Run 10:20, cotations UW live. Jambes non verifiees sur IBKR (connecteur indisponible)."
     }
   ]
 }
