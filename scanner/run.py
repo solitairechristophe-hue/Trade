@@ -13,8 +13,8 @@ from .config import ScanConfig
 from .model import Regime
 from .output import ecrire_rapport, ecrire_tickets, rapport_markdown, ticket_id, vers_ticket
 from .regime import build_regime
-from .scoring import Candidate, noter, preselection, regrouper
-from .sizing import Dimensionnee, charger_calibration, classer, dimensionner
+from .scoring import Candidate, murs_contre, noter, preselection, regrouper, setup_gamma
+from .sizing import Dimensionnee, charger_calibration, classer, dimensionner, rendement_setup
 from .state import EtatScanner
 from .structure import proposer
 
@@ -127,6 +127,14 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
         if not c.direction or c.score < cfg.min_score:
             res.etudies.append((c, f"écarté : score {c.score:.0f} < {cfg.min_score:.0f}" if c.direction else "écarté : sans direction"))
             continue
+        sens = 1 if c.direction == "up" else -1
+        if murs_contre(ctx, sens):
+            res.etudies.append((c, "écarté : le trade bute sur un mur gamma (9 à 15 % de réussite en backtest)"))
+            continue
+        gamma_ok = setup_gamma(ctx, sens)
+        if cfg.require_gamma_setup and not gamma_ok:
+            res.etudies.append((c, "écarté : pas de setup gamma (murs favorables et gamma des dealers négatif)"))
+            continue
         if res.regime.risk_off:
             res.etudies.append((c, "écarté : risk-off (événement macro imminent)"))
             continue
@@ -146,7 +154,9 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
             continue
         d = dimensionner(prop, c.score, nav, risk_per_trade=cfg.risk_per_trade,
                          max_premium_per_trade=cfg.max_premium_per_trade, max_contracts=cfg.max_contracts_per_order,
-                         risque_restant=budget_risque_total, calib=calib)
+                         risque_restant=budget_risque_total, calib=calib,
+                         rendement=rendement_setup(cfg.calibration_file, "gamma") if gamma_ok else None,
+                         taille_essai=cfg.trial_size)
         if d is None:
             res.etudies.append((c, "écarté : risque par contrat > budget (2 % de la NAV)"))
             continue

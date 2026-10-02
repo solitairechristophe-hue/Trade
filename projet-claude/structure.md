@@ -16,9 +16,9 @@ from dataclasses import dataclass
 ```
 
 Débit : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR), largeur 0,5–3 ATR resserrée
-si la prime dépasse le budget ; limite = mid + 15 % du spread, plafond = limite × 1,07, TP = limite + 45 % × (largeur − limite),
+si la prime dépasse le budget ; limite = mid, plafond = limite (aucune poursuite), TP = limite + 45 % × (largeur − limite),
 SL = 50 % de la limite ; prime = limite × 100 ; risque = (limite − SL) × 110.
-Crédit : courte ~delta 0,25, longue 0,5–2 ATR plus loin, crédit ≥ 20 % de la largeur ; limite = mid − 15 % du spread,
+Crédit : courte ~delta 0,25, longue 0,5–2 ATR plus loin, crédit ≥ 20 % de la largeur ; limite = mid,
 plafond = limite, TP = 50 % du crédit, SL = 150 % du crédit ; jambes décrites dans le sens débit, side SELL.
 Condition d'entrée ±0,15 ATR, stop action 1,5 ATR (ou au-delà du mur gamma), sortie temps = run + 10 jours
 calendaires (~7 séances), jamais après échéance − 7 j.
@@ -32,3 +32,9 @@ Le stop loss à 50 % de la prime n'est pas surveillé : la perte retenue est la 
 (prime entière pour un débit, (largeur − crédit) × 100 pour un crédit). Quantité = min(2 % NAV / perte maximale, 5).
 EV = p × gain au TP − (1 − p) × perte maximale. Le TP reste posé chez IBKR en LIMIT GTC attaché à l'entrée.
 Limite calculée sur le mid de clôture de la veille ; condition et stop action sur le cours de préouverture.
+
+## Règles issues du backtest (2 octobre 2026, `backtest.md`)
+- Écart achat-vente cumulé des deux jambes ≤ 3 % de la largeur du spread, sinon pas de trade.
+- Murs gamma contre le trade : rejet. Setup gamma obligatoire : murs favorables ET gamma des dealers négatif.
+- Espérance du setup gamma : +2,9 % de la prime en moyenne (erreur type 4,8 %), soit EV = 0,029 × prime.
+- Taille d'essai : 1 combo par trade tant que 50 trades réels n'ont pas été journalisés.

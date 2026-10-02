@@ -117,18 +117,25 @@ volume moyen), `get_ticker_indicator_series` (RSI14), `get_gex_levels` (call wal
 `get_institutional_ownership_by_ticker`, `get_average_return_per_month_by_ticker`, `get_analyst_ratings` (titre),
 puis la chaîne : `get_options_chain` / `get_chains_for_expiry` / `get_atm_chains` (bid, ask, delta, OI, volume).
 
-## 4. Score de confluence (0–100) et direction
+## 4. Score de confluence (0–100), direction et portes gamma
 
-Facteurs directionnels (−1..+1) × poids : flux 3 (tanh(net/1,5 M$)), screener 1,5, net premium du jour 1,5,
-variations d'OI 1, initiés 1, Congrès 0,5, analystes 0,5, tendance 1,5 (prix vs SMA20/50).
-Le flux est pondéré : une alerte dont l'échéance tombe 0 à 10 jours après les prochains résultats compte pour
-moitié (les achats d'options informent avant les événements imprévus, pas avant les événements programmés).
-Direction = signe de la somme. Confirmations × poids : qualité du flux 1 (sweeps, blocs « floor », fills
-ascendants, vol > OI, ouverture), liquidité relative 0,75 (ratio O/S = contrats du jour × 100 / actions du jour :
-tanh((O/S − 0,15)/0,15), −0,5 au-delà de 500 Md$ de capitalisation, −0,25 au-delà de 200 Md$ ; la prévisibilité
-est forte quand l'option est liquide et l'action peu liquide), dark pool 1, murs gamma 1, short interest 0,5, saisonnalité 0,5, accord avec le régime 2
-(biais marché/secteur × direction), résultats −1 (≤ 3 j) ou −0,4 (dans la fenêtre).
-Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18,75)), divisé par 2 en risk-off. Seuil : **55**.
+Poids revus après le backtest croisé du 2 octobre 2026 (`reports/backtest/synthese.md`, 830 signaux, 17 séances) :
+seuls les murs gamma et le gamma des dealers ont tenu hors échantillon.
+
+Facteurs directionnels (−1..+1) × poids : flux 1,5 (une alerte dont l'échéance tombe 0 à 10 jours après les
+prochains résultats compte pour moitié), screener 1, Congrès 1, prime nette du jour 0,5, variations d'OI 0,5,
+initiés 0,5, tendance 0,5, analystes 0,25. Direction = signe de la somme.
+Confirmations × poids : **murs gamma 3** (place = distance au mur dans le sens du trade, appui = distance au mur
+opposé, en ATR plafonnés à 5 ; facteur = tanh(place) − 0,5 × tanh(appui)), **gamma des dealers négatif 1,5**
+(+1 si négatif, −1 sinon), résultats −1 (≤ 3 j) ou −0,4 (dans la fenêtre), liquidité relative 0,75, qualité du
+flux 0,5, dark pool 0,5, régime 0,5, short interest 0,25, saisonnalité 0,25.
+Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / somme des poids)), divisé par 2 en risk-off. Seuil : **55**.
+
+**Portes, après le score :**
+- **Murs gamma contre le trade** (facteur < −0,05) : rejet systématique. En backtest, 9 à 15 % de réussite.
+- **Setup gamma obligatoire** : murs favorables (> 0) ET gamma net des dealers négatif. C'est le seul setup dont
+  l'espérance mesurée n'est pas négative. Sans lui, pas de trade, quel que soit le score.
+- « Aucune opportunité » est la réponse la plus fréquente, et c'est normal.
 
 ## 5. Structure, niveaux, taille
 
@@ -137,20 +144,22 @@ Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / 18,75)), divisé par 2 en risk-
 - IV rank < 55 % → **débit** : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR),
   largeur entre 0,5 et 3 ATR ; si la prime dépasse 3 % de la NAV, resserrer la largeur (courte plus proche) avant
   d'abandonner le titre ;
-  limite = mid + 15 % du spread, plafond = limite × 1,07, TP = limite + 45 % × (largeur − limite),
+  **limite = mid, plafond = limite** (aucune poursuite du prix), TP = limite + 45 % × (largeur − limite),
   SL = 50 % de la limite ; prime = limite × 100 ; risque = (limite − SL) × 110.
 - IV rank ≥ 55 % → **crédit** (bull put / bear call) : courte ~delta 0,25, longue ≤ 2 ATR plus loin, crédit ≥ 20 % de
-  la largeur, largeur 0,5–2 ATR ; limite = mid − 15 % du spread, plafond = limite, TP = 50 % du crédit, SL = 1,5 × crédit
+  la largeur, largeur 0,5–2 ATR ; limite = mid, plafond = limite, TP = 50 % du crédit, SL = 1,5 × crédit
   (à 2 × l'espérance est négative pour p ≤ 0,69) ;
   jambes décrites dans le sens débit, `side` = SELL.
-- Liquidité : spread ≤ max(0,10 ; 15 % du mid), OI ou volume ≥ 50.
+- Liquidité : spread de chaque jambe ≤ max(0,10 ; 15 % du mid), OI ou volume ≥ 50, et **écart achat-vente cumulé
+  des deux jambes ≤ 3 % de la largeur** : au-delà, le coût d'exécution efface l'avantage mesuré.
 - Condition d'entrée : action ≥ prix + 0,15 ATR (hausse) / ≤ prix − 0,15 ATR (baisse) ; stop action = 1,5 ATR
   (ou juste au-delà du mur gamma) ; **sortie temps = run + 10 jours calendaires (~7 séances)**, jamais après
   échéance − 7 j : la recherche trouve l'effet du flux sur quelques jours à une semaine, pas au-delà.
 - Quantité = min(2 % NAV / risque par combo, 3 % NAV / prime par combo (débit), 5) ; 0 → écarté.
-- p(gain) = p_min + (p_max − p_min) × score/100, avec p_min et p_max mesurés par la calibration
-  (`reports/calibration.md`, `scanner/calibration.json`) ; à défaut 0,38 et 0,62 ; EV = p × gain TP − (1 − p) × perte SL ; **classer par EV / $ risqué**,
-  garder au plus 3 (et le quota journalier restant), EV > 0 seulement.
+  **Taille d'essai : 1 combo par trade** tant que le setup gamma n'a pas 50 trades réels journalisés.
+- Espérance : pour le setup gamma, EV = rendement moyen mesuré × prime (`scanner/calibration.json`,
+  `setups.gamma.rendement_moyen` = +2,9 % de la prime, erreur type 4,8 %) ; hors setup, modèle p × gain −
+  (1 − p) × perte avec p calibré (0,30). **Classer par EV / $ risqué**, garder au plus 3, EV > 0 seulement.
 
 ## 6. Vérification et instructions IBKR
 

@@ -7,7 +7,7 @@ Interactive Brokers (IBKR).
 
 Procédure de référence : `SKILL.md` des connaissances du projet, section **Mode matin** (par défaut), puis les
 étapes 0 à 7. Formules : `scoring.md`, `structure.md`. Format des tickets : `tickets-README.md`.
-Probabilité de gain : `calibration.md`. Elle vaut 0,30 tant qu'aucune mesure plus récente ne montre mieux ; un trade
+Résultats du backtest croisé : `backtest.md`. Probabilité de gain : `calibration.md`. Elle vaut 0,30 tant qu'aucune mesure plus récente ne montre mieux ; un trade
 à espérance négative n'est jamais proposé, et « aucune opportunité » est une réponse normale.
 
 ## Règles
@@ -19,6 +19,9 @@ Probabilité de gain : `calibration.md`. Elle vaut 0,30 tant qu'aucune mesure pl
   ni proposé dans les 3 derniers jours.
 - Fenêtre analysée : toute la séance US précédente. Niveaux d'entrée et stop calculés sur le cours de préouverture.
   Un gap de plus de 1 ATR contre le sens du trade invalide le dossier.
+- Portes issues du backtest : rejeter tout trade qui bute sur un mur gamma ; n'accepter que le setup gamma
+  (murs favorables ET gamma des dealers négatif) ; entrée au mid sans poursuite ; écart achat-vente cumulé des
+  jambes ≤ 3 % de la largeur ; 1 combo par trade tant que 50 trades réels ne sont pas journalisés.
 - Événement macro majeur dans la journée (CPI, emploi, PCE, PPI, FOMC, PIB, ISM, ventes au détail) : risk-off,
   rapport seulement.
 

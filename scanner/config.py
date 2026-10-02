@@ -78,6 +78,8 @@ class ScanConfig:
     short_delta: float = 0.25
     iv_rank_credit: float = 0.55  # au-dessus : spread crédit plutôt que débit
     tp_fraction: float = 0.45  # part du gain maximal visée (débit), horizon court
+    require_gamma_setup: bool = True  # seul setup à espérance non négative mesurée
+    trial_size: int = 1  # contrats par trade tant que le setup n'est pas prouvé en réel (0 = sans plafond)
     hold_days: int = 10  # sortie temps : 10 jours calendaires (~7 séances)
     calibration_file: Path = Path(__file__).with_name("calibration.json")  # versionné avec le code
     sl_fraction: float = 0.50  # part de la prime perdue avant sortie (débit)
@@ -124,6 +126,8 @@ class ScanConfig:
             iv_rank_credit=_float("IV_RANK_CREDIT", cls.iv_rank_credit),
             cooldown_days=_int("COOLDOWN_DAYS", cls.cooldown_days),
             hold_days=_int("HOLD_DAYS", cls.hold_days),
+            require_gamma_setup=_bool("REQUIRE_GAMMA_SETUP", True),
+            trial_size=_int("TRIAL_SIZE", cls.trial_size),
             calibration_file=Path(os.environ.get("CALIBRATION_FILE", str(cls.calibration_file))),
             scan_minute=_int("SCAN_MINUTE", cls.scan_minute),
         )

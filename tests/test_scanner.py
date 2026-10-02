@@ -55,14 +55,14 @@ def chaine(prix=50.0, expiry=dt.date(2026, 11, 20), largeur_pas=1.0, iv=0.45):
             val, delta = _bs(prix, k, T, iv, call)
             val = max(val, 0.05)
             q.append(OptionQuote(f"ACME{expiry:%y%m%d}{'C' if call else 'P'}{int(k * 1000):08d}", typ, k, expiry,
-                                 round(val - 0.04, 2), round(val + 0.04, 2), round(delta, 3), 500, 300, iv))
+                                 round(val - 0.01, 2), round(val + 0.01, 2), round(delta, 3), 500, 300, iv))
     return q
 
 
 def contexte(**k):
     c = TickerContext(ticker="ACME", price=50.0, atr14=1.2, sma20=48.0, sma50=46.0, avg_volume=5e6,
                       sector="Technology", marketcap=20e9, iv_rank=0.30, call_wall=55.0, put_wall=47.0,
-                      net_call_premium=2e6, net_put_premium=-0.5e6, chain=chaine())
+                      net_call_premium=2e6, net_put_premium=-0.5e6, gex_net=-1e6, chain=chaine())
     for a, v in k.items():
         setattr(c, a, v)
     return c
@@ -326,3 +326,39 @@ def test_calibration_sans_avantage_bloque_les_trades(tmp_path):
     res = scan(cfg, FauxFeeds(), 8918.0, set(), NOW, ecrire=False)
     assert res.retenus == [] and any("espérance négative" in d for _, d in res.etudies)
     assert res.feeds["calibration de p"].startswith("0.30")
+
+
+# --- règles issues du backtest croisé -----------------------------------------------
+
+def test_murs_gamma_contre_le_trade_rejete(tmp_path):
+    from scanner.scoring import murs_contre, setup_gamma
+    bute = contexte(call_wall=50.3, put_wall=44.0)  # call wall à 0,25 ATR au-dessus : la hausse bute
+    assert murs_contre(bute, 1) and not setup_gamma(bute, 1)
+    assert setup_gamma(contexte(), 1) and not murs_contre(contexte(), 1)
+    res = scan(cfg_test(tmp_path), FauxFeeds(ctx={"ACME": bute}), 8918.0, set(), NOW, ecrire=False)
+    assert res.retenus == [] and any("mur gamma" in d for _, d in res.etudies)
+
+
+def test_sans_gamma_negatif_pas_de_trade(tmp_path):
+    res = scan(cfg_test(tmp_path), FauxFeeds(ctx={"ACME": contexte(gex_net=2e6)}), 8918.0, set(), NOW, ecrire=False)
+    assert res.retenus == [] and any("pas de setup gamma" in d for _, d in res.etudies)
+    res2 = scan(cfg_test(tmp_path, require_gamma_setup=False), FauxFeeds(ctx={"ACME": contexte(gex_net=2e6)}),
+                8918.0, set(), NOW, ecrire=False)
+    assert len(res2.retenus) == 1
+
+
+def test_esperance_mesuree_et_taille_essai(tmp_path):
+    cfg = cfg_test(tmp_path)
+    cfg.calibration_file.write_text(json.dumps({"p_min": 0.243, "p_max": 0.259,
+                                                "setups": {"gamma": {"rendement_moyen": 0.029}}}))
+    res = scan(cfg, FauxFeeds(), 8918.0, set(), NOW, ecrire=False)
+    assert len(res.retenus) == 1
+    d = res.retenus[0]
+    assert d.quantity == 1 and d.ev == round(0.029 * d.prop.premium_per_contract, 2)
+    assert d.prop.price_cap == d.prop.limit_price  # entrée au mid, sans poursuite
+
+
+def test_spread_trop_large_refuse():
+    large = contexte(chain=[OptionQuote(q.symbol, q.type, q.strike, q.expiry, q.bid - 0.10, q.ask + 0.10, q.delta,
+                                        q.open_interest, q.volume, q.iv) for q in chaine()])
+    assert proposer(large, "up", JOUR, min_dte=21, max_dte=50) is None

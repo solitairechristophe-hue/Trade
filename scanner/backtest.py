@@ -182,6 +182,45 @@ def score_desk(r: dict) -> float:
     return c.score if (1 if c.direction == "up" else -1) == d else 100 - c.score  # score dans le sens du signal
 
 
+def _bs(S: float, K: float, T: float, iv: float, call: bool) -> float:
+    if T <= 0 or iv <= 0:
+        return max(0.0, (S - K) if call else (K - S))
+    d1 = (math.log(S / K) + 0.5 * iv * iv * T) / (iv * math.sqrt(T))
+    d2 = d1 - iv * math.sqrt(T)
+    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))
+    return S * N(d1) - K * N(d2) if call else K * N(-d2) - S * N(-d1)
+
+
+def pnl_spread(r: dict, dte: int = 35, tenue_j: int = 10, largeur_atr: float = 1.5,
+               cout_frac: float = 0.05) -> float | None:
+    """Rendement simulé d'un vertical acheté (prime = 1) : longue à la monnaie, courte à 1,5 ATR dans le sens
+    du signal, échéance 35 jours, sortie après 7 séances (10 jours). Prix Black-Scholes à l'IV 30 j du jour
+    d'entrée, inchangée à la sortie ; coût d'exécution = 5 % de la largeur à l'aller et au retour."""
+    S0, S1, atr, iv = _f(r.get("close_t")), _f(r.get("close_t7")), _f(r.get("atr14")), _f(r.get("iv30d"))
+    if not (S0 and S1 and atr and iv) or iv > 2.5:
+        return None
+    d = int(float(r["direction"]))
+    call = d > 0
+    K1, K2 = S0, S0 + d * largeur_atr * atr
+    w = abs(K2 - K1)
+    v = lambda S, T: _bs(S, K1, T, iv, call) - _bs(S, K2, T, iv, call)
+    entree = v(S0, dte / 365) + cout_frac * w
+    sortie = max(0.0, v(S1, (dte - tenue_j) / 365) - cout_frac * w)
+    return (sortie - entree) / entree if entree > 0 else None
+
+
+def bloc_pnl(titre: str, groupes: list[tuple[str, list[dict]]]) -> list[str]:
+    L = ["", f"## {titre}", "", "Rendement simulé d'un spread acheté, en multiple de la prime payée.", "",
+         "| Groupe | n | rendement moyen | médiane | trades gagnants |", "|---|---|---|---|---|"]
+    for nom, sel in groupes:
+        x = sorted(v for v in (pnl_spread(r) for r in sel) if v is not None)
+        if not x:
+            L.append(f"| {nom} | 0 | – | – | – |")
+            continue
+        L.append(f"| {nom} | {len(x)} | {sum(x) / len(x):+.1%} | {x[len(x) // 2]:+.1%} | {sum(1 for v in x if v > 0) / len(x):.0%} |")
+    return L
+
+
 def par_tranche(rows: list[dict], cle: str, bornes: list[float]) -> list[tuple[str, int, float, tuple, float]]:
     out = []
     for lo, hi in zip(bornes, bornes[1:]):
@@ -197,6 +236,24 @@ def hasard(rows: list[dict], seuil: float = 1.0) -> float:
     return 0.5 * sum(1 for x in m if x >= seuil) / len(m) if m else float("nan")
 
 
+CONCLUSION = """## Conclusions (2 octobre 2026)
+
+- **Aucune source seule ne bat le hasard** sur 830 signaux : flux d'options, screeners, prime nette du jour,
+  tendance, momentum, régime de marché, initiés, analystes, dark pool. Le score d'origine du desk n'était pas
+  monotone : ses notes au-dessus de 75 faisaient le moins bien.
+- **Les murs gamma sont le seul facteur robuste.** Quand le trade bute sur un mur, l'action ne fait 1 ATR dans le
+  bon sens que 9 à 15 % du temps, sur chaque moitié de la période et sur chaque panel. Ces trades sont rejetés.
+- **Setup gamma** (murs favorables et gamma des dealers négatif) : 33 % de réussite à 1 ATR contre 26 % au hasard,
+  repéré sur le panel flux et confirmé sur le panel screener (32,6 %, n = 46). Sur 84 trades, un spread simulé
+  gagne +2,9 % de la prime en moyenne si l'exécution coûte 1,5 % de la largeur par sens, avec une erreur type de
+  4,8 % : **prometteur, pas prouvé**. À 5 % de coût par sens, il perd 10 à 15 %.
+- **L'exécution décide de tout** : entrée au mid, spreads dont l'écart achat-vente cumulé reste sous 3 % de la
+  largeur, aucune poursuite du prix.
+- Limites : deux mois d'un marché plat, signaux corrélés au sein d'une séance, prix d'options simulés
+  (Black-Scholes à l'IV du jour), variations d'open interest non testables à date, saisonnalité biaisée,
+  certains cours et données d'initiés obtenus hors Unusual Whales pour le seul besoin du backtest."""
+
+
 def analyse() -> str:
     rows = [r for r in charger() if _f(r.get("move_atr")) is not None]
     for r in rows:
@@ -206,7 +263,7 @@ def analyse() -> str:
     coupe = dates[len(dates) // 2]
     train = [r for r in rows if r["date"] < coupe]
     test = [r for r in rows if r["date"] >= coupe]
-    L = ["# Backtest croisé du Desk Flow", "",
+    L = ["# Backtest croisé du Desk Flow", "", CONCLUSION, "", "## Détail", "",
          f"{len(rows)} signaux ({sum(1 for r in rows if r.get('source') == 'flux')} flux, "
          f"{sum(1 for r in rows if r.get('source') != 'flux')} screener seul), {len(dates)} séances "
          f"({dates[0]} → {dates[-1]}), issue à 7 séances. Hasard au seuil 1 ATR : {hasard(rows):.3f}.", ""]
@@ -251,6 +308,20 @@ def analyse() -> str:
             n, w, g = _taux(sel)
             mv = sum(_f(r["move_atr"]) for r in sel) / n if n else float("nan")
             L.append(f"| {nom} | {regle} | {n} | {g:.3f} | {wilson(w, n)[0]:.2f}–{wilson(w, n)[1]:.2f} | {mv:+.2f} |")
+    gam = lambda r: r["_f"].get("murs_gamma") is not None and r["_f"]["murs_gamma"] > 0 and (r["_f"].get("gamma_negatif") or 0) > 0
+    contre = lambda r: r["_f"].get("murs_gamma") is not None and r["_f"]["murs_gamma"] < -0.05
+    flux_rows = [r for r in rows if r.get("source") == "flux"]
+    scr_rows = [r for r in rows if r.get("source") != "flux"]
+    L += bloc_pnl("Spreads simulés", [
+        ("tous les signaux", rows),
+        ("flux seul", flux_rows),
+        ("screener seul", scr_rows),
+        ("règle gamma vérifiée, panel flux", [r for r in flux_rows if gam(r)]),
+        ("règle gamma vérifiée, panel screener (test)", [r for r in scr_rows if gam(r)]),
+        ("murs gamma contre le trade", [r for r in rows if contre(r)]),
+        ("score du desk ≥ 65", [r for r in rows if r["_score"] >= 65]),
+        ("score appris ≥ 2, dates de test", [r for r in test if r["_appris"] >= 2]),
+    ])
     L += ["", "Lecture : un facteur utile a un « gain » nettement plus haut quand il confirme que quand il contredit, "
           "et un mouvement moyen positif quand il confirme. Avec moins de 300 signaux sur deux mois, un écart de "
           "moins de 10 points n'est pas distinguable du bruit."]

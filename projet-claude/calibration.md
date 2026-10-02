@@ -87,3 +87,10 @@ Sur les ETF, le flux est même légèrement à contre-sens. La plupart des gros 
   - mesurer le P&L réel des spreads plutôt que le mouvement de l'action ;
   - tester séparément le flux sur actions individuelles, hors ETF et couvertures d'indices ;
   - tester des filtres de qualité : `all_opening_trades`, sweep côté ask, volume supérieur à l'open interest.
+
+## Mise à jour après le backtest croisé (même jour)
+
+Le flux seul reste sans avantage. Le seul setup à espérance non négative mesurée est le **setup gamma** : murs
+gamma favorables et gamma des dealers négatif, 33 % de réussite à 1 ATR (IC 95 % 0,24–0,44, n = 84) et +2,9 %
+de la prime en moyenne sur spread simulé. Le desk utilise ce rendement pour l'espérance de ce setup. Détail dans
+`backtest.md`.

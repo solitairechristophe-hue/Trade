@@ -15,5 +15,34 @@
   "seuil_atr": 1.0,
   "jours_analyses": 17,
   "mesure": "mouvement de l'action dans le sens du flux ≥ seuil × ATR14 après hold séances",
-  "date": "2026-10-02"
+  "date": "2026-10-02",
+  "setups": {
+    "gamma": {
+      "regle": "murs gamma favorables (tanh(place) − 0,5 × tanh(appui) > 0) et gamma net des dealers négatif",
+      "n": 84,
+      "gain_1atr": 0.333,
+      "ic95_gain_1atr": [
+        0.242,
+        0.439
+      ],
+      "hasard_1atr": 0.26,
+      "rendement_moyen": 0.029,
+      "erreur_type": 0.048,
+      "trades_gagnants": 0.452,
+      "hypotheses": "spread acheté à la monnaie / 1,5 ATR, échéance 35 j, sortie à 7 séances, prix Black-Scholes à l'IV 30 j, coût 1,5 % de la largeur par sens",
+      "hors_echantillon": {
+        "panel": "screener",
+        "n": 46,
+        "gain_1atr": 0.326,
+        "rendement_moyen": 0.056
+      },
+      "statut": "non prouvé : rendement positif mais à moins d'une erreur type de zéro"
+    },
+    "murs_contre": {
+      "n": 44,
+      "gain_1atr": 0.11,
+      "rendement_moyen_cout_5pct": -0.363,
+      "statut": "rejet systématique"
+    }
+  }
 }

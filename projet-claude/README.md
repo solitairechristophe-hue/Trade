@@ -2,7 +2,7 @@
 
 1. claude.ai → Projets → Nouveau projet « Desk Flow ».
 2. Instructions du projet : coller le contenu de `INSTRUCTIONS.md`.
-3. Connaissances du projet : ajouter `SKILL.md`, `scoring.md`, `structure.md`, `tickets-README.md`, `calibration.md`.
+3. Connaissances du projet : ajouter `SKILL.md`, `scoring.md`, `structure.md`, `tickets-README.md`, `calibration.md`, `backtest.md`.
 4. Connecteurs : activer Unusual Whales et Interactive Brokers (IBKR) dans la conversation.
 5. Chaque matin vers 11h30 (Paris) : « run ». Ajouter « et crée les instructions IBKR » ou « et crée les alertes »
    pour autoriser ces créations. Poser ensuite dans TWS les ordres conditionnels du bloc « Ordres à poser ».

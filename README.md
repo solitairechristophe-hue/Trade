@@ -52,7 +52,9 @@ UW (REST : tide, secteurs, GEX, flow alerts, screeners, dark pool, OI, initiés,
 3. **Enrichissement** des 15 titres les plus chauds (15 flux par titre : prix/ATR/SMA, murs gamma,
    exposition gamma, net premium, OI du titre, dark pool du titre, short interest, max pain, IV rank,
    analystes, initiés, saisonnalité, chaîne cotée) ;
-4. **Score** 0–100 (poids dans `scanner/scoring.py`), direction, seuil 55 ;
+4. **Score** 0–100 (poids dans `scanner/scoring.py`, revus par le backtest croisé `reports/backtest/synthese.md`),
+   direction, seuil 55, puis **portes gamma** : rejet si le trade bute sur un mur gamma, setup gamma obligatoire
+   (murs favorables et gamma des dealers négatif), entrée au mid, écart achat-vente des jambes ≤ 3 % de la largeur ;
 5. **Structure** : vertical débit (IV rank < 55 %) ou crédit (≥ 55 %), échéance 21–50 j hors résultats,
    limite/plafond/TP/SL, condition d'entrée sur l'action, stop action, sortie temps à 10 jours (l'effet du flux
    d'options sur l'action se mesure sur quelques jours à une semaine) ;

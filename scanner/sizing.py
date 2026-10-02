@@ -39,6 +39,14 @@ def charger_calibration(chemin: Path) -> tuple[float, float] | None:
     return (lo, max(lo, hi))
 
 
+def rendement_setup(chemin: Path, setup: str) -> float | None:
+    """Rendement moyen mesuré (multiple de la prime) d'un setup, depuis la calibration."""
+    try:
+        return float(json.loads(chemin.read_text(encoding="utf-8"))["setups"][setup]["rendement_moyen"])
+    except Exception:
+        return None
+
+
 def probabilite(score: float, calib: tuple[float, float] | None = None) -> float:
     """Probabilité de gain : interpolation linéaire entre p_min (score 0) et p_max (score 100)."""
     lo, hi = calib or (P_MIN, P_MAX)
@@ -56,13 +64,22 @@ def quantite(prop: Proposition, nav: float, risk_per_trade: float, max_premium_p
 
 def dimensionner(prop: Proposition, score: float, nav: float, *, risk_per_trade: float,
                  max_premium_per_trade: float, max_contracts: int, risque_restant: float,
-                 calib: tuple[float, float] | None = None) -> Dimensionnee | None:
+                 calib: tuple[float, float] | None = None, rendement: float | None = None,
+                 taille_essai: int = 0) -> Dimensionnee | None:
+    """`rendement` : espérance mesurée en backtest pour ce setup (multiple de la prime) ; elle remplace le
+    modèle binaire TP/SL, qui ignore que la plupart des pertes sont partielles. `taille_essai` > 0 plafonne
+    la quantité tant que le setup n'est pas prouvé en réel."""
     q = quantite(prop, nav, risk_per_trade, max_premium_per_trade, max_contracts, risque_restant)
+    if taille_essai:
+        q = min(q, taille_essai)
     if q < 1:
         return None
     p = probabilite(score, calib)
     gain, perte = prop.max_gain_per_contract * q, prop.max_loss_per_contract * q
-    ev = p * gain - (1 - p) * perte
+    if rendement is not None:
+        ev = rendement * prop.premium_per_contract * q
+    else:
+        ev = p * gain - (1 - p) * perte
     return Dimensionnee(prop=prop, score=score, quantity=q, p_win=p, ev=round(ev, 2),
                         ev_ratio=round(ev / perte, 3), max_loss=round(perte, 2),
                         premium=round(prop.premium_per_contract * q, 2))

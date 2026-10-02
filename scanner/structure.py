@@ -36,6 +36,9 @@ class Proposition:
     note: str
 
 
+MAX_SPREAD_LARGEUR = 0.03  # écart achat-vente cumulé des deux jambes, en part de la largeur du spread
+
+
 def _arrondi(p: float) -> float:
     """Pas de cotation des options : 0,01 sous 3 $, 0,05 au-dessus."""
     pas = 0.01 if p < 3 else 0.05
@@ -160,10 +163,12 @@ def _debit(ctx, direction, expiry, longue, courte, atr, tp_fraction, sl_fraction
     mid = longue.mid - courte.mid
     if mid <= 0.05 or mid >= 0.8 * width:
         return None  # trop cher pour le gain possible
-    limit = _arrondi_haut(mid + 0.15 * (longue.spread + courte.spread) / 2)
+    if longue.spread + courte.spread > MAX_SPREAD_LARGEUR * width:
+        return None  # exécution trop chère : l'avantage mesuré disparaît au-delà de ~1,5 % de la largeur par sens
+    limit = _arrondi_haut(mid)  # entrée au mid, jamais au-dessus
     if limit * 100 > max_premium:
         return None
-    cap = _arrondi_haut(limit * 1.07)
+    cap = limit  # pas de poursuite du prix : le coût d'exécution mange l'avantage
     tp = _arrondi(limit + tp_fraction * (width - limit))
     sl = _arrondi(limit * (1 - sl_fraction))
     if not sl < limit < tp:
@@ -200,7 +205,9 @@ def _vertical_credit(ctx, direction, expiry, quotes, today, short_delta, atr, ma
     credit_mid = courte.mid - longue.mid
     if credit_mid < 0.2 * width or credit_mid <= 0.05:
         return None  # pas assez payé pour le risque
-    limit = _arrondi(credit_mid - 0.15 * (courte.spread + longue.spread) / 2)
+    if courte.spread + longue.spread > MAX_SPREAD_LARGEUR * width:
+        return None
+    limit = _arrondi(credit_mid)
     marge = (width - limit) * 100
     if marge > max_premium:
         return None
