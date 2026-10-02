@@ -31,6 +31,35 @@ class Resultat:
     ordres: list[Ordre] = field(default_factory=list)
 
 
+def alias_de_cotation(instruments: dict[int, dict]) -> dict[int, int]:
+    """id d'une cotation secondaire (suffixe .RTH, séance régulière) → id de la cotation principale."""
+    par_symbole = {(m.get("symbol") or "").upper(): i for i, m in instruments.items() if m.get("symbol")}
+    alias = {}
+    for i, m in instruments.items():
+        sym = (m.get("symbol") or "").upper()
+        if sym.endswith(".RTH") and sym[:-4] in par_symbole:
+            alias[i] = par_symbole[sym[:-4]]
+    return alias
+
+
+def _composition(col: Collecteur, username: str, cfg: Config, jour: dt.date):
+    """Composition depuis la source choisie, l'autre source servant de repli si la première manque."""
+    def live():
+        brut = col.portefeuille_live(username)
+        return composition.analyser(brut, jour, cfg.tickers.jours_fraicheur, cfg.univers.inclure_copies) if brut else None
+
+    def actifs():
+        brut = col.actifs(username, cfg.tickers.jours_fraicheur + 7)
+        return composition.depuis_actifs(brut, cfg.tickers.jours_fraicheur) if brut else None
+
+    ordre = (actifs, live) if cfg.univers.source_composition == "actifs" else (live, actifs)
+    for source in ordre:
+        comp = source()
+        if comp is not None and comp.lignes:
+            return comp
+    return None
+
+
 def executer(cfg: Config, col: Collecteur, jour: dt.date, etat: dict) -> Resultat:
     u = cfg.univers
     debut = dt.datetime.combine(jour, dt.time(0, 0), NY)
@@ -71,12 +100,7 @@ def executer(cfg: Config, col: Collecteur, jour: dt.date, etat: dict) -> Resulta
     for i, p in enumerate(pre, 1):
         if i % 25 == 0:
             log.info("portefeuilles examinés : %d / %d", i, len(pre))
-        if u.source_composition == "actifs":
-            brut = col.actifs(p.username, cfg.tickers.jours_fraicheur + 7)
-            comp = composition.depuis_actifs(brut, cfg.tickers.jours_fraicheur) if brut else None
-        else:
-            brut = col.portefeuille_live(p.username)
-            comp = composition.analyser(brut, jour, cfg.tickers.jours_fraicheur, u.inclure_copies) if brut else None
+        comp = _composition(col, p.username, cfg, jour)
         if comp is None:
             sans_composition += 1
             continue
@@ -87,11 +111,14 @@ def executer(cfg: Config, col: Collecteur, jour: dt.date, etat: dict) -> Resulta
     notes.sort(key=lambda n: -n.qualite)
     res.portefeuilles = notes
 
-    # 4. Croisement des compositions et note des tickers
-    res.tickers = tickers.noter(notes, cfg.tickers)
+    # 4. Croisement des compositions et note des tickers (doublons de cotation fusionnés)
     detenus = poids_detenus(etat)
-    ids = [t.instrument_id for t in res.tickers] + list(detenus)
+    ids = sorted({i for n in notes for i in n.composition.lignes} | set(detenus))
     res.instruments = col.instruments(ids)
+    alias = alias_de_cotation(res.instruments)
+    for n in notes:
+        n.composition.fusionner(alias)
+    res.tickers = tickers.noter(notes, cfg.tickers)
 
     # 5. Données de marché et conditions eToro pour la liste courte, puis portefeuille cible
     a = cfg.allocation

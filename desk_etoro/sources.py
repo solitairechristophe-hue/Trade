@@ -59,7 +59,8 @@ class Collecteur:
         try:
             donnees = appel()
         except ErreurApi as e:
-            if e.statut in (400, 403, 404):  # profil privé, désinscrit ou inconnu : on n'insiste pas
+            # profil privé, désinscrit ou inconnu, ou réponse trop lourde pour le relais MCP : on n'insiste pas
+            if e.statut in (400, 403, 404, 413):
                 log.info("%s indisponible (%s)", nom, e.statut)
                 self.snap.ecrire(nom, {"_erreur": e.statut})
                 return None

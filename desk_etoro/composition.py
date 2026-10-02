@@ -53,6 +53,18 @@ class Composition:
     part_court: float = 0.0
     source: str = "live"  # live (positions détaillées) ou actifs (répartition seule)
 
+    def fusionner(self, alias: dict[int, int]) -> None:
+        """Regroupe les lignes d'un même titre coté sous plusieurs identifiants (ex. AMZN et AMZN.RTH)."""
+        for ancien, cible in alias.items():
+            l = self.lignes.pop(ancien, None)
+            if l is None:
+                continue
+            dest = self.lignes.setdefault(cible, Ligne(cible))
+            for champ in ("poids_long", "poids_court", "poids_levier", "poids_recent", "pnl_pondere", "nb_positions"):
+                setattr(dest, champ, getattr(dest, champ) + getattr(l, champ))
+            if l.premiere_ouverture and (not dest.premiere_ouverture or l.premiere_ouverture < dest.premiere_ouverture):
+                dest.premiere_ouverture = l.premiere_ouverture
+
     def resume(self) -> dict:
         return {
             "nb_instruments": len(self.lignes),

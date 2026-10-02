@@ -94,6 +94,16 @@ def test_composition_actifs_et_renforcement():
     assert c.source == "actifs+historique"
 
 
+def test_fusion_des_cotations():
+    from desk_etoro.desk import alias_de_cotation
+    alias = alias_de_cotation({1: {"symbol": "AMZN"}, 2: {"symbol": "AMZN.RTH"}, 3: {"symbol": "XYZ.RTH"}})
+    assert alias == {2: 1}
+    c = composition.analyser(live([pos(1, 20), pos(2, 30, ouverture="2026-09-30T10:00:00Z")]), JOUR)
+    c.fusionner(alias)
+    assert set(c.lignes) == {1} and c.lignes[1].poids == pytest.approx(0.5)
+    assert c.lignes[1].poids_recent == pytest.approx(0.3) and c.lignes[1].nb_positions == 2
+
+
 # -- Qualité -----------------------------------------------------------------------------------
 def ligne_classement(nom, **k):
     l = {"username": nom, "type": "trader", "subType": "pi-elite", "gain": 0.2, "riskScore": 4,
