@@ -34,7 +34,10 @@ EV = p × gain au TP − (1 − p) × perte maximale. Le TP reste posé chez IBK
 Limite calculée sur le mid de clôture de la veille ; condition et stop action sur le cours de préouverture.
 
 ## Règles issues du backtest (2 octobre 2026, `backtest.md`)
+- **Débit uniquement** : le spread à crédit n'est pas validé par le backtest.
+- **Ratio IV 30 jours / volatilité prévue HAR ≤ 1,2**, sinon pas de trade. Trade baissier refusé si l'emprunt ≥ 10 %.
 - Écart achat-vente cumulé des deux jambes ≤ 3 % de la largeur du spread, sinon pas de trade.
 - Murs gamma contre le trade : rejet. Setup gamma obligatoire : murs favorables ET gamma des dealers négatif.
-- Espérance du setup gamma : +2,9 % de la prime en moyenne (erreur type 4,8 %), soit EV = 0,029 × prime.
+- Espérance du setup gamma avec option pas trop chère : +11,1 % de la prime (erreur type 6,4 %), soit EV = 0,111 × prime.
+- Le score classe seulement ; il ne filtre pas.
 - Taille d'essai : 1 combo par trade tant que 50 trades réels n'ont pas été journalisés.

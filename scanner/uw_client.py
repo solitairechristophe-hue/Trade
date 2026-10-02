@@ -15,6 +15,7 @@ from typing import Any
 import requests
 
 from .config import ScanConfig
+from .volatilite import prevision_har, ratio_iv
 from .model import (CongressTx, DarkPoolPrint, FlowAlert, InsiderTx, OIChange, OptionQuote,
                     ScreenerHit, TickerContext)
 
@@ -277,9 +278,10 @@ class UwClient:
                 ctx.next_earnings = ctx.next_earnings or _date(_g(r, "next_earnings_date", "earnings_date"))
 
         def candles():
-            rows = self._liste(f"/api/stock/{ticker}/ohlc/1d", {"limit": 60})
+            rows = self._liste(f"/api/stock/{ticker}/ohlc/1d", {"limit": 90})
             rows = sorted(rows, key=lambda r: str(_g(r, "date", "start_time", defaut="")))
             closes = [_f(_g(r, "close")) for r in rows if _g(r, "close")]
+            clotures[:] = closes
             if closes:
                 ctx.price = ctx.price or closes[-1]
                 if len(closes) >= 20:
@@ -385,6 +387,24 @@ class UwClient:
                     wr = _f(_g(r, "positive_months_perc", "win_rate"))
                     ctx.seasonality_win_rate = wr / 100 if wr > 1 else wr
 
+        def borrow():
+            rows = self._liste(f"/api/shorts/{ticker}/data")
+            if rows:
+                last = max(rows, key=lambda r: str(_g(r, "timestamp", "date", "market_date", defaut="")))
+                fee = _g(last, "fee_rate", "borrow_fee", "fee", "short_borrow_rate")
+                if fee is not None:
+                    v = _f(fee)
+                    ctx.borrow_fee = v / 100 if v > 1 else v
+
+        def pulse():
+            r = self.get(f"/api/stock/{ticker}/options-pulse", cle=None)
+            d = r.get("data", r) if isinstance(r, dict) else r
+            if isinstance(d, list) and d:
+                d = d[-1]
+            if isinstance(d, dict):
+                v = _g(d, "sntm_score", "sentiment_score")
+                ctx.pulse_score = _f(v) if v is not None else None
+
         def chain():
             rows = self._liste(f"/api/stock/{ticker}/option-contracts", {
                 "min_dte": max(min_dte - 7, 7), "max_dte": max_dte, "exclude_zero_oi_chains": "true", "limit": 500})
@@ -399,15 +419,19 @@ class UwClient:
                     open_interest=_i(_g(r, "open_interest")), volume=_i(_g(r, "volume")),
                     iv=_f(_g(r, "implied_volatility", "iv"))))
 
+        clotures: list[float] = []
         for nom, fn in (("stock screener", screener), ("ticker info", info), ("ohlc 1d", candles),
                         ("gex levels", gex_levels), ("greek exposure", gex), ("short interest", shorts),
                         ("max pain", max_pain), ("analyst ratings", analysts), ("insider buy/sells", insiders),
                         ("dark pool ticker", dark_pool), ("oi change ticker", oi_change),
                         ("volatility context", vol_context), ("net premium ticks", net_prem),
-                        ("seasonality", seasonality), ("option contracts", chain)):
+                        ("seasonality", seasonality), ("borrow fee", borrow),
+                        ("options pulse (non pondéré)", pulse), ("option contracts", chain)):
             if nom == "seasonality" and not self.cfg.seasonality_feeds:
                 continue
             essai(nom, fn)
+        ctx.vol_prevue = prevision_har(clotures)
+        ctx.ratio_iv = ratio_iv(ctx.iv30, clotures)
         return ctx
 
     def daily_candles(self, ticker: str, limit: int = 120) -> list[dict]:

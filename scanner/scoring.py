@@ -25,7 +25,7 @@ POIDS = {
     "oi_change": 0.5,     # non testable à date (pas d'historique)
     "dark_pool": 0.5,
     "insider": 0.5,
-    "congress": 1.0,      # stable sur les deux moitiés (33 % vs 17 %), à confirmer
+    "congress": 0.25,     # effet du backtest probablement artefactuel ; pas d'avantage agrégé (Belmont et al. 2022)
     "analyst": 0.25,
     "trend": 0.5,         # aucun effet mesuré
     "gex": 3.0,           # murs gamma : 28 % quand favorables, 9 % quand contre, stable hors échantillon
@@ -115,15 +115,31 @@ def preselection(cands: dict[str, Candidate], n: int) -> list[Candidate]:
 
 # --- facteurs -------------------------------------------------------------------------
 
+FAMILLE_FLUX = ("flow", "flow_quality", "screener", "greek_flow", "regime")
+PLAFOND_FLUX = 1.5  # contribution maximale de toute la famille : ces signaux viennent des mêmes exécutions
+
+
+def poids_echeance(dte: int) -> float:
+    """Flux séparé par échéance : le très court terme est surtout spéculatif ou de couverture."""
+    if dte < 7:
+        return 0.0
+    if dte < 21:
+        return 0.5
+    if dte <= 60:
+        return 1.0
+    return 0.75
+
+
 def poids_alerte(a: FlowAlert) -> float:
     """Le flux misant sur des résultats annoncés informe peu : achats d'options informatifs avant les
     événements imprévus, pas avant les événements programmés. Une échéance qui suit de près les
-    résultats compte pour moitié."""
+    résultats compte pour moitié. Le poids dépend aussi de l'échéance (poids_echeance)."""
+    w = poids_echeance(a.dte) if a.created_at else 1.0
     if a.next_earnings and a.created_at:
         jours = (a.expiry - a.next_earnings).days
         if 0 <= jours <= 10 and a.next_earnings >= a.created_at.date():
-            return 0.5
-    return 1.0
+            w *= 0.5
+    return w
 
 
 def facteur_flux(c: Candidate) -> tuple[float, float]:
@@ -319,7 +335,9 @@ def noter(c: Candidate, regime: Regime, today: dt.date, max_dte: int) -> Candida
         "analyst": facteur_analyst(ctx),
         "trend": facteur_tendance(ctx),
     }
-    brut = sum(POIDS[k] * v for k, v in directionnels.items())
+    flux_dir = sum(POIDS[k] * v for k, v in directionnels.items() if k in FAMILLE_FLUX)
+    brut = max(-PLAFOND_FLUX, min(PLAFOND_FLUX, flux_dir)) + \
+        sum(POIDS[k] * v for k, v in directionnels.items() if k not in FAMILLE_FLUX)
     direction = 1 if brut > 0 else (-1 if brut < 0 else 0)
     if direction == 0:
         c.direction, c.score, c.factors = "", 0.0, directionnels
@@ -336,7 +354,11 @@ def noter(c: Candidate, regime: Regime, today: dt.date, max_dte: int) -> Candida
         "earnings": facteur_resultats(ctx, today, max_dte),
         "liquidity": facteur_liquidite(ctx),
     }
-    total = abs(brut) + sum(POIDS[k] * v for k, v in confirmations.items())
+    # la famille flux ne peut pas se confirmer elle-même : ses confirmations partagent le même plafond
+    conf_flux = sum(POIDS[k] * v for k, v in confirmations.items() if k in FAMILLE_FLUX)
+    reste_flux = max(0.0, PLAFOND_FLUX - abs(max(-PLAFOND_FLUX, min(PLAFOND_FLUX, flux_dir))))
+    total = abs(brut) + max(-PLAFOND_FLUX, min(reste_flux, conf_flux)) + \
+        sum(POIDS[k] * v for k, v in confirmations.items() if k not in FAMILLE_FLUX)
     poids_max = sum(POIDS.values())
     score = 100 * max(0.0, min(1.0, 0.5 + 0.5 * math.tanh(2.2 * total / poids_max)))
     if regime.risk_off:

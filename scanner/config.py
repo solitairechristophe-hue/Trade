@@ -49,6 +49,7 @@ class ScanConfig:
     tickets_dir: Path = Path("/tickets")
     reports_dir: Path = Path("/reports")
     state_file: Path = Path("/data/scanner.sqlite")
+    journal_file: Path = Path("/reports/journal-desk-flow.csv")  # tous les candidats de chaque run
     kill_switch_file: Path = Path("/data/STOP")
     ntfy_url: str = ""
 
@@ -62,7 +63,7 @@ class ScanConfig:
 
     # Univers et sélection
     lookback_minutes: int = 90  # fenêtre de flux analysée à chaque heure
-    min_score: float = 55.0
+    min_score: float = 0.0  # le score ne décide plus (aucune valeur mesurée) : les portes gamma et volatilité décident, le score classe
     min_premium_alert: float = 50_000.0
     min_marketcap: float = 2_000_000_000.0
     min_stock_price: float = 8.0
@@ -76,7 +77,9 @@ class ScanConfig:
     max_dte: int = 50
     long_delta: float = 0.50
     short_delta: float = 0.25
-    iv_rank_credit: float = 0.55  # au-dessus : spread crédit plutôt que débit
+    iv_rank_credit: float = 1.01  # crédit désactivé : non validé par le backtest (IV constante dans la simulation)
+    max_ratio_iv: float = 1.2  # IV30 / volatilité prévue (HAR) au-delà duquel l'option est trop chère
+    max_borrow_fee_bear: float = 0.10  # coût d'emprunt au-delà duquel un trade baissier est refusé
     tp_fraction: float = 0.45  # part du gain maximal visée (débit), horizon court
     require_gamma_setup: bool = True  # seul setup à espérance non négative mesurée
     trial_size: int = 1  # contrats par trade tant que le setup n'est pas prouvé en réel (0 = sans plafond)
@@ -124,6 +127,9 @@ class ScanConfig:
             min_dte=_int("MIN_DTE", cls.min_dte),
             max_dte=_int("MAX_DTE", cls.max_dte),
             iv_rank_credit=_float("IV_RANK_CREDIT", cls.iv_rank_credit),
+            max_ratio_iv=_float("MAX_RATIO_IV", cls.max_ratio_iv),
+            max_borrow_fee_bear=_float("MAX_BORROW_FEE_BEAR", cls.max_borrow_fee_bear),
+            journal_file=Path(os.environ.get("JOURNAL_FILE", str(cls.journal_file))),
             cooldown_days=_int("COOLDOWN_DAYS", cls.cooldown_days),
             hold_days=_int("HOLD_DAYS", cls.hold_days),
             require_gamma_setup=_bool("REQUIRE_GAMMA_SETUP", True),

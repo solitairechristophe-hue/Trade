@@ -106,3 +106,25 @@ def ecrire_rapport(dossier: Path, quand: dt.datetime, desk: str, texte: str) -> 
     f.write_text(texte, encoding="utf-8")
     (dossier / f"dernier-{desk}.md").write_text(texte, encoding="utf-8")
     return f
+
+
+COLONNES_JOURNAL = ["quand", "titre", "sens", "score", "decision", "sources", "murs_gamma", "gamma_neg",
+                    "ratio_iv", "borrow_fee", "pulse_score", "prix", "atr14", "raisons"]
+
+
+def journaliser(chemin: Path, quand: dt.datetime, etudies: list[tuple[Candidate, str]]) -> None:
+    """Journal prospectif : chaque candidat de chaque run, retenu ou non, pour valider le desk sans biais."""
+    import csv
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    neuf = not chemin.exists()
+    with chemin.open("a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if neuf:
+            w.writerow(COLONNES_JOURNAL)
+        for c, decision in etudies:
+            ctx = c.context
+            w.writerow([quand.isoformat(timespec="minutes"), c.ticker, c.direction, c.score, decision,
+                        "+".join(c.sources), round(c.factors.get("gex", 0.0), 3), c.factors.get("gamma_neg", ""),
+                        round(ctx.ratio_iv, 3) if ctx and ctx.ratio_iv else "", ctx.borrow_fee if ctx else "",
+                        ctx.pulse_score if ctx else "", ctx.price if ctx else "", round(ctx.atr14, 3) if ctx else "",
+                        "; ".join(c.reasons[:4])])

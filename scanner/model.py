@@ -156,6 +156,10 @@ class TickerContext:
     institutional_ownership_pct: float | None = None
     seasonality_month_avg: float | None = None  # rendement moyen du mois en cours
     seasonality_win_rate: float | None = None
+    vol_prevue: float | None = None  # volatilité annualisée prévue (HAR)
+    ratio_iv: float | None = None  # IV30 / volatilité prévue
+    borrow_fee: float | None = None  # coût d'emprunt annuel de l'action (fraction)
+    pulse_score: float | None = None  # Nasdaq Options Pulse : sentiment des achats d'ouverture (collecté, non pondéré)
     chain: list[OptionQuote] = field(default_factory=list)
     feeds_ok: list[str] = field(default_factory=list)
     feeds_failed: list[str] = field(default_factory=list)

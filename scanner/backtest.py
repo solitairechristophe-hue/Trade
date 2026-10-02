@@ -17,6 +17,7 @@ from pathlib import Path
 from .calibrate import wilson
 from .model import FlowAlert, Regime, ScreenerHit, TickerContext
 from .scoring import Candidate, noter
+from .volatilite import ratio_iv
 
 D = Path(__file__).resolve().parents[1] / "reports" / "backtest"
 
@@ -54,6 +55,9 @@ def charger() -> list[dict]:
         par_date.setdefault(r["date"], {k: r[k] for k in ("tide_pente", "tide_niveau", "tide_bias", "spy_tide",
                                                          "qqq_tide", "spy_gex_net", "spy_gex_positive",
                                                          "macro_event_next_day") if k in r})
+    clotures: dict[str, list[tuple[str, float]]] = {}
+    for r in _lire(D / "clotures.csv"):
+        clotures.setdefault(r["ticker"], []).append((r["date"], float(r["close"])))
     out = []
     for r in panel:
         k = (r["date"], r["ticker"])
@@ -62,6 +66,9 @@ def charger() -> list[dict]:
         row.update(feats.get(k, {}))
         s = scr_idx.get(k)
         row["screener_dir"] = s["direction"] if s else ""
+        serie = [c for d, c in sorted(clotures.get(r["ticker"], [])) if d <= r["date"]]  # connu à la date D
+        vr = ratio_iv(_f(row.get("iv30d")), serie)
+        row["ratio_iv"] = "" if vr is None else round(vr, 4)
         out.append(row)
     return out
 
@@ -118,6 +125,7 @@ def facteurs(r: dict) -> dict[str, float | None]:
     f["short_volume"] = (g("short_vol_ratio_5d") - 0.45) * 4 * d if g("short_vol_ratio_5d") is not None else None
     f["resultats_7j"] = (-1.0 if g("earnings_within_7") == 1 else 0.0) if g("earnings_within_7") is not None else None
     f["saisonnalite"] = math.tanh(g("season_avg_month") / (5 if abs(g("season_avg_month")) > 1 else 0.05)) * d if g("season_avg_month") is not None else None
+    f["option_bon_marche"] = (max(-1.0, min(1.0, (1.2 - g("ratio_iv")) / 0.3))) if g("ratio_iv") is not None else None
     f["macro_lendemain"] = (-1.0 if g("macro_event_next_day") == 1 else 0.0) if g("macro_event_next_day") is not None else None
     return f
 
@@ -210,14 +218,19 @@ def pnl_spread(r: dict, dte: int = 35, tenue_j: int = 10, largeur_atr: float = 1
 
 
 def bloc_pnl(titre: str, groupes: list[tuple[str, list[dict]]]) -> list[str]:
-    L = ["", f"## {titre}", "", "Rendement simulé d'un spread acheté, en multiple de la prime payée.", "",
-         "| Groupe | n | rendement moyen | médiane | trades gagnants |", "|---|---|---|---|---|"]
+    L = ["", f"## {titre}", "", "Rendement simulé d'un spread acheté, en multiple de la prime payée, selon le coût "
+         "d'exécution par sens (en part de la largeur). 1,5 % correspond à une entrée au mid et une sortie au bid sur un "
+         "spread dont l'écart achat-vente cumulé est sous 3 % ; 5 % à un spread large exécuté au marché.", "",
+         "| Groupe | n | coût 1,5 % : moyen | erreur type | gagnants | coût 5 % : moyen |", "|---|---|---|---|---|---|"]
     for nom, sel in groupes:
-        x = sorted(v for v in (pnl_spread(r) for r in sel) if v is not None)
+        x = [v for v in (pnl_spread(r, cout_frac=0.015) for r in sel) if v is not None]
+        y = [v for v in (pnl_spread(r, cout_frac=0.05) for r in sel) if v is not None]
         if not x:
-            L.append(f"| {nom} | 0 | – | – | – |")
+            L.append(f"| {nom} | 0 | – | – | – | – |")
             continue
-        L.append(f"| {nom} | {len(x)} | {sum(x) / len(x):+.1%} | {x[len(x) // 2]:+.1%} | {sum(1 for v in x if v > 0) / len(x):.0%} |")
+        m = sum(x) / len(x)
+        se = (sum((v - m) ** 2 for v in x) / len(x)) ** 0.5 / len(x) ** 0.5
+        L.append(f"| {nom} | {len(x)} | {m:+.1%} | {se:.1%} | {sum(1 for v in x if v > 0) / len(x):.0%} | {sum(y) / len(y):+.1%} |")
     return L
 
 
@@ -247,8 +260,20 @@ CONCLUSION = """## Conclusions (2 octobre 2026)
   repéré sur le panel flux et confirmé sur le panel screener (32,6 %, n = 46). Sur 84 trades, un spread simulé
   gagne +2,9 % de la prime en moyenne si l'exécution coûte 1,5 % de la largeur par sens, avec une erreur type de
   4,8 % : **prometteur, pas prouvé**. À 5 % de coût par sens, il perd 10 à 15 %.
+- **Le prix de la volatilité compte autant que la direction.** En ajoutant au setup gamma la condition « IV 30 jours
+  au plus 1,2 fois la volatilité prévue par un modèle HAR », le spread simulé gagne +11 % de la prime en moyenne
+  (n = 49, erreur type 6,4 %), positif sur les deux panels et les deux moitiés de la période. Quand l'option est
+  chère (ratio > 1,3), le même setup perd 12 %. C'est la règle du desk, la plus solide trouvée, mais pas prouvée.
+- **Le score ne trie pas** : ajouter un seuil de score 55 aux portes fait tomber le résultat de +11 % à +3 %.
+  Les portes décident ; le score sert seulement à classer les candidats qui les passent.
 - **L'exécution décide de tout** : entrée au mid, spreads dont l'écart achat-vente cumulé reste sous 3 % de la
   largeur, aucune poursuite du prix.
+- **Congrès** : l'effet apparent du backtest contredit la littérature (Belmont et al. 2022) et mélange dates de
+  transaction et de publication ; il est traité comme un artefact (poids 0,25).
+- **Non testés faute d'historique accessible par le connecteur** : Options Pulse (achats d'ouverture Nasdaq),
+  coût d'emprunt, flux séparé par échéance. Ils sont collectés ou appliqués comme garde-fous, et journalisés.
+- La simulation garde l'IV constante entre l'entrée et la sortie : elle ne mesure pas la prime de variance d'un
+  spread vendu. Les spreads à crédit sont donc désactivés tant qu'ils ne sont pas testés autrement.
 - Limites : deux mois d'un marché plat, signaux corrélés au sein d'une séance, prix d'options simulés
   (Black-Scholes à l'IV du jour), variations d'open interest non testables à date, saisonnalité biaisée,
   certains cours et données d'initiés obtenus hors Unusual Whales pour le seul besoin du backtest."""
@@ -321,6 +346,13 @@ def analyse() -> str:
         ("murs gamma contre le trade", [r for r in rows if contre(r)]),
         ("score du desk ≥ 65", [r for r in rows if r["_score"] >= 65]),
         ("score appris ≥ 2, dates de test", [r for r in test if r["_appris"] >= 2]),
+        ("setup gamma + IV/vol prévue ≤ 1,2", [r for r in rows if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
+        ("  dont panel flux", [r for r in flux_rows if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
+        ("  dont panel screener", [r for r in scr_rows if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
+        ("  dont première moitié", [r for r in train if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
+        ("  dont seconde moitié", [r for r in test if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
+        ("setup gamma + IV/vol prévue > 1,3", [r for r in rows if gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) > 1.3]),
+        ("score du desk ≥ 55 avec toutes les portes", [r for r in rows if r["_score"] >= 55 and gam(r) and _f(r.get("ratio_iv")) is not None and _f(r["ratio_iv"]) <= 1.2]),
     ])
     L += ["", "Lecture : un facteur utile a un « gain » nettement plus haut quand il confirme que quand il contredit, "
           "et un mouvement moyen positif quand il confirme. Avec moins de 300 signaux sur deux mois, un écart de "

@@ -11,8 +11,20 @@
   repéré sur le panel flux et confirmé sur le panel screener (32,6 %, n = 46). Sur 84 trades, un spread simulé
   gagne +2,9 % de la prime en moyenne si l'exécution coûte 1,5 % de la largeur par sens, avec une erreur type de
   4,8 % : **prometteur, pas prouvé**. À 5 % de coût par sens, il perd 10 à 15 %.
+- **Le prix de la volatilité compte autant que la direction.** En ajoutant au setup gamma la condition « IV 30 jours
+  au plus 1,2 fois la volatilité prévue par un modèle HAR », le spread simulé gagne +11 % de la prime en moyenne
+  (n = 49, erreur type 6,4 %), positif sur les deux panels et les deux moitiés de la période. Quand l'option est
+  chère (ratio > 1,3), le même setup perd 12 %. C'est la règle du desk, la plus solide trouvée, mais pas prouvée.
+- **Le score ne trie pas** : ajouter un seuil de score 55 aux portes fait tomber le résultat de +11 % à +3 %.
+  Les portes décident ; le score sert seulement à classer les candidats qui les passent.
 - **L'exécution décide de tout** : entrée au mid, spreads dont l'écart achat-vente cumulé reste sous 3 % de la
   largeur, aucune poursuite du prix.
+- **Congrès** : l'effet apparent du backtest contredit la littérature (Belmont et al. 2022) et mélange dates de
+  transaction et de publication ; il est traité comme un artefact (poids 0,25).
+- **Non testés faute d'historique accessible par le connecteur** : Options Pulse (achats d'ouverture Nasdaq),
+  coût d'emprunt, flux séparé par échéance. Ils sont collectés ou appliqués comme garde-fous, et journalisés.
+- La simulation garde l'IV constante entre l'entrée et la sortie : elle ne mesure pas la prime de variance d'un
+  spread vendu. Les spreads à crédit sont donc désactivés tant qu'ils ne sont pas testés autrement.
 - Limites : deux mois d'un marché plat, signaux corrélés au sein d'une séance, prix d'options simulés
   (Black-Scholes à l'IV du jour), variations d'open interest non testables à date, saisonnalité biaisée,
   certains cours et données d'initiés obtenus hors Unusual Whales pour le seul besoin du backtest.
@@ -40,6 +52,7 @@
 | momentum_5j | 830 | 444 | 0.259 | 0.22–0.30 | -0.05 | 355 | 0.299 | +0.19 | -0.040 |
 | iv_rank_bas | 830 | 644 | 0.278 | 0.24–0.31 | +0.04 | 88 | 0.318 | +0.24 | -0.040 |
 | screener | 756 | 731 | 0.276 | 0.24–0.31 | +0.07 | 25 | 0.320 | +0.04 | -0.044 |
+| option_bon_marche | 828 | 564 | 0.257 | 0.22–0.29 | +0.00 | 246 | 0.309 | +0.18 | -0.052 |
 | prime_nette_jour | 830 | 564 | 0.261 | 0.23–0.30 | +0.03 | 229 | 0.323 | +0.18 | -0.063 |
 | inities | 526 | 137 | 0.285 | 0.22–0.36 | +0.14 | 156 | 0.353 | +0.24 | -0.068 |
 | regime_marche | 830 | 411 | 0.226 | 0.19–0.27 | -0.14 | 419 | 0.317 | +0.24 | -0.091 |
@@ -56,11 +69,11 @@
 
 | Score | n | gain 1 ATR | IC 95 % | mvt moyen |
 |---|---|---|---|---|
-| 0–45 | 119 | 0.277 | 0.20–0.36 | -0.14 |
-| 45–55 | 181 | 0.260 | 0.20–0.33 | +0.06 |
-| 55–65 | 318 | 0.277 | 0.23–0.33 | +0.09 |
-| 65–75 | 139 | 0.273 | 0.21–0.35 | +0.02 |
-| 75–101 | 73 | 0.274 | 0.18–0.39 | +0.22 |
+| 0–45 | 119 | 0.269 | 0.20–0.35 | -0.04 |
+| 45–55 | 183 | 0.279 | 0.22–0.35 | +0.03 |
+| 55–65 | 333 | 0.294 | 0.25–0.34 | +0.15 |
+| 65–75 | 129 | 0.209 | 0.15–0.29 | -0.16 |
+| 75–101 | 66 | 0.273 | 0.18–0.39 | +0.17 |
 
 ## Score appris (dates < 2026-08-28) puis testé (dates ≥ 2026-08-28)
 
@@ -94,17 +107,24 @@ Règle : murs gamma favorables (> 0) ET gamma des dealers négatif.
 
 ## Spreads simulés
 
-Rendement simulé d'un spread acheté, en multiple de la prime payée.
+Rendement simulé d'un spread acheté, en multiple de la prime payée, selon le coût d'exécution par sens (en part de la largeur). 1,5 % correspond à une entrée au mid et une sortie au bid sur un spread dont l'écart achat-vente cumulé est sous 3 % ; 5 % à un spread large exécuté au marché.
 
-| Groupe | n | rendement moyen | médiane | trades gagnants |
-|---|---|---|---|---|
-| tous les signaux | 829 | -21.3% | -23.1% | 29% |
-| flux seul | 135 | -23.5% | -27.9% | 25% |
-| screener seul | 694 | -20.9% | -22.9% | 30% |
-| règle gamma vérifiée, panel flux | 38 | -15.4% | -16.2% | 29% |
-| règle gamma vérifiée, panel screener (test) | 46 | -10.2% | -17.3% | 35% |
-| murs gamma contre le trade | 44 | -36.3% | -33.9% | 11% |
-| score du desk ≥ 65 | 211 | -19.9% | -23.3% | 29% |
-| score appris ≥ 2, dates de test | 317 | -22.9% | -24.4% | 31% |
+| Groupe | n | coût 1,5 % : moyen | erreur type | gagnants | coût 5 % : moyen |
+|---|---|---|---|---|---|
+| tous les signaux | 829 | -6.7% | 1.5% | 42% | -21.3% |
+| flux seul | 135 | -9.1% | 3.7% | 39% | -23.5% |
+| screener seul | 694 | -6.2% | 1.6% | 42% | -20.9% |
+| règle gamma vérifiée, panel flux | 38 | -0.4% | 6.7% | 47% | -15.4% |
+| règle gamma vérifiée, panel screener (test) | 46 | +5.6% | 6.7% | 43% | -10.2% |
+| murs gamma contre le trade | 44 | -23.2% | 5.1% | 30% | -36.3% |
+| score du desk ≥ 65 | 194 | -9.4% | 2.8% | 39% | -23.8% |
+| score appris ≥ 2, dates de test | 317 | -8.4% | 2.6% | 41% | -22.9% |
+| setup gamma + IV/vol prévue ≤ 1,2 | 49 | +11.1% | 6.4% | 51% | -5.3% |
+|   dont panel flux | 23 | +6.3% | 7.8% | 52% | -9.5% |
+|   dont panel screener | 26 | +15.4% | 9.8% | 50% | -1.6% |
+|   dont première moitié | 20 | +4.5% | 6.4% | 45% | -11.0% |
+|   dont seconde moitié | 29 | +15.7% | 9.8% | 55% | -1.3% |
+| setup gamma + IV/vol prévue > 1,3 | 29 | -11.9% | 7.4% | 34% | -25.5% |
+| score du desk ≥ 55 avec toutes les portes | 37 | +3.3% | 6.0% | 43% | -12.0% |
 
 Lecture : un facteur utile a un « gain » nettement plus haut quand il confirme que quand il contredit, et un mouvement moyen positif quand il confirme. Avec moins de 300 signaux sur deux mois, un écart de moins de 10 points n'est pas distinguable du bruit.

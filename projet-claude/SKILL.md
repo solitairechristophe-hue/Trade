@@ -117,39 +117,54 @@ volume moyen), `get_ticker_indicator_series` (RSI14), `get_gex_levels` (call wal
 `get_institutional_ownership_by_ticker`, `get_average_return_per_month_by_ticker`, `get_analyst_ratings` (titre),
 puis la chaîne : `get_options_chain` / `get_chains_for_expiry` / `get_atm_chains` (bid, ask, delta, OI, volume).
 
+Calculs obligatoires pour les portes (section 4) :
+- **murs gamma et gamma des dealers** : `get_gex_levels` (call wall, put wall) et `get_greek_exposure_by_ticker`
+  (gamma net = call_gamma + put_gamma, dernière séance ; `timeframe` compte depuis aujourd'hui, prendre 1Y) ;
+- **volatilité prévue (HAR)** : à partir d'au moins 23 clôtures journalières jusqu'à la veille du run,
+  r² = (ln(Cₜ/Cₜ₋₁))², v̂ = 0,36·r²(dernier) + 0,28·moyenne(r², 5) + 0,28·moyenne(r², 22) + 0,08·moyenne(r², tout),
+  volatilité prévue = √(252·v̂) ; **ratio = IV 30 jours / volatilité prévue** (IV de `get_stock_screener` ou de
+  la structure par terme) ;
+- **coût d'emprunt** : `get_short_data_by_ticker` (taux d'emprunt ou « fee rate ») ;
+- Options Pulse (achats d'ouverture Nasdaq) n'a pas d'outil dans le connecteur : ne pas l'inventer.
+
 ## 4. Score de confluence (0–100), direction et portes gamma
 
 Poids revus après le backtest croisé du 2 octobre 2026 (`reports/backtest/synthese.md`, 830 signaux, 17 séances) :
 seuls les murs gamma et le gamma des dealers ont tenu hors échantillon.
 
 Facteurs directionnels (−1..+1) × poids : flux 1,5 (une alerte dont l'échéance tombe 0 à 10 jours après les
-prochains résultats compte pour moitié), screener 1, Congrès 1, prime nette du jour 0,5, variations d'OI 0,5,
+prochains résultats compte pour moitié ; échéances < 7 j ignorées, 7–20 j pour moitié, 21–60 j pleines, > 60 j à
+0,75), screener 1, Congrès 0,25, prime nette du jour 0,5, variations d'OI 0,5,
 initiés 0,5, tendance 0,5, analystes 0,25. Direction = signe de la somme.
 Confirmations × poids : **murs gamma 3** (place = distance au mur dans le sens du trade, appui = distance au mur
 opposé, en ATR plafonnés à 5 ; facteur = tanh(place) − 0,5 × tanh(appui)), **gamma des dealers négatif 1,5**
 (+1 si négatif, −1 sinon), résultats −1 (≤ 3 j) ou −0,4 (dans la fenêtre), liquidité relative 0,75, qualité du
 flux 0,5, dark pool 0,5, régime 0,5, short interest 0,25, saisonnalité 0,25.
-Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / somme des poids)), divisé par 2 en risk-off. Seuil : **55**.
+**Famille flux plafonnée** : flux, qualité du flux, screener, prime nette du jour et régime viennent des mêmes
+exécutions ; leur contribution cumulée est plafonnée à ±1,5.
+Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / somme des poids)), divisé par 2 en risk-off. **Le score ne sert
+qu'à classer** : il n'a montré aucune valeur en backtest, et un seuil à 55 dégradait le résultat. Les portes décident.
 
 **Portes, après le score :**
 - **Murs gamma contre le trade** (facteur < −0,05) : rejet systématique. En backtest, 9 à 15 % de réussite.
-- **Setup gamma obligatoire** : murs favorables (> 0) ET gamma net des dealers négatif. C'est le seul setup dont
-  l'espérance mesurée n'est pas négative. Sans lui, pas de trade, quel que soit le score.
+- **Setup gamma obligatoire** : murs favorables (> 0) ET gamma net des dealers négatif.
+- **Option pas trop chère** : ratio IV 30 jours / volatilité prévue ≤ **1,2**. Ratio inconnu : pas de trade.
+  Setup gamma et ratio ≤ 1,2 : +11 % de la prime en moyenne sur spread simulé (n = 49, erreur type 6,4 %),
+  positif sur les deux panels et les deux moitiés ; ratio > 1,3 : −12 %.
+- **Trade baissier** : refusé si le coût d'emprunt de l'action est ≥ 10 % par an (les puts paient le financement,
+  Muravyev, Pearson et Pollet 2025).
 - « Aucune opportunité » est la réponse la plus fréquente, et c'est normal.
 
 ## 5. Structure, niveaux, taille
 
 - Échéances 21–50 jours qui n'enjambent pas les résultats (sinon ≥ 10 j avant les résultats, sinon on passe) :
   construire la structure sur chaque échéance valide et garder celle au meilleur gain/risque.
-- IV rank < 55 % → **débit** : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR),
+- **Débit uniquement** (le spread à crédit n'est pas validé : la simulation garde l'IV constante et ne mesure pas
+  la prime de variance). **Débit** : longue ~delta 0,50 (ou 0,40), courte ~delta 0,25 ou au mur gamma (0,8–2,5 ATR),
   largeur entre 0,5 et 3 ATR ; si la prime dépasse 3 % de la NAV, resserrer la largeur (courte plus proche) avant
   d'abandonner le titre ;
   **limite = mid, plafond = limite** (aucune poursuite du prix), TP = limite + 45 % × (largeur − limite),
   SL = 50 % de la limite ; prime = limite × 100 ; risque = (limite − SL) × 110.
-- IV rank ≥ 55 % → **crédit** (bull put / bear call) : courte ~delta 0,25, longue ≤ 2 ATR plus loin, crédit ≥ 20 % de
-  la largeur, largeur 0,5–2 ATR ; limite = mid, plafond = limite, TP = 50 % du crédit, SL = 1,5 × crédit
-  (à 2 × l'espérance est négative pour p ≤ 0,69) ;
-  jambes décrites dans le sens débit, `side` = SELL.
 - Liquidité : spread de chaque jambe ≤ max(0,10 ; 15 % du mid), OI ou volume ≥ 50, et **écart achat-vente cumulé
   des deux jambes ≤ 3 % de la largeur** : au-delà, le coût d'exécution efface l'avantage mesuré.
 - Condition d'entrée : action ≥ prix + 0,15 ATR (hausse) / ≤ prix − 0,15 ATR (baisse) ; stop action = 1,5 ATR
@@ -158,7 +173,7 @@ Score = 100 × (0,5 + 0,5 × tanh(2,2 × total / somme des poids)), divisé par 
 - Quantité = min(2 % NAV / risque par combo, 3 % NAV / prime par combo (débit), 5) ; 0 → écarté.
   **Taille d'essai : 1 combo par trade** tant que le setup gamma n'a pas 50 trades réels journalisés.
 - Espérance : pour le setup gamma, EV = rendement moyen mesuré × prime (`scanner/calibration.json`,
-  `setups.gamma.rendement_moyen` = +2,9 % de la prime, erreur type 4,8 %) ; hors setup, modèle p × gain −
+  `setups.gamma_vol.rendement_moyen` = +11,1 % de la prime, erreur type 6,4 %) ; hors setup, modèle p × gain −
   (1 − p) × perte avec p calibré (0,30). **Classer par EV / $ risqué**, garder au plus 3, EV > 0 seulement.
 
 ## 6. Vérification et instructions IBKR
@@ -174,6 +189,10 @@ dans la session (ou dans le prompt de la Routine). Sinon l'étape 6 reste en **l
 et noter les identifiants de contrats IBKR (et le combo) dans le rapport, pour que l'utilisateur crée l'ordre lui-même.
 
 ## 7. Sorties
+
+0. **Journal** : ajouter à `reports/journal-desk-flow.csv` une ligne par candidat étudié, retenu ou non
+   (quand, titre, sens, score, décision, sources, murs gamma, gamma des dealers, ratio IV, coût d'emprunt, prix,
+   ATR, raisons). C'est la seule façon de valider le desk en réel sans biais de sélection.
 
 1. `tickets/<AAAA-MM-JJ>-flow-ia.json` (desk `flow-ia`, format `tickets/README.md`, ids `flow-ia-<date>-<SYM>`,
    ajouter au fichier du jour sans doublon) — le robot du VPS les exécute.

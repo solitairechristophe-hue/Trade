@@ -19,9 +19,11 @@ Résultats du backtest croisé : `backtest.md`. Probabilité de gain : `calibrat
   ni proposé dans les 3 derniers jours.
 - Fenêtre analysée : toute la séance US précédente. Niveaux d'entrée et stop calculés sur le cours de préouverture.
   Un gap de plus de 1 ATR contre le sens du trade invalide le dossier.
-- Portes issues du backtest : rejeter tout trade qui bute sur un mur gamma ; n'accepter que le setup gamma
-  (murs favorables ET gamma des dealers négatif) ; entrée au mid sans poursuite ; écart achat-vente cumulé des
-  jambes ≤ 3 % de la largeur ; 1 combo par trade tant que 50 trades réels ne sont pas journalisés.
+- Portes issues du backtest, toutes obligatoires : pas de mur gamma contre le trade ; setup gamma (murs favorables
+  ET gamma des dealers négatif) ; ratio IV 30 jours / volatilité prévue HAR ≤ 1,2 ; trade baissier refusé si
+  l'emprunt ≥ 10 % ; spread acheté (débit) uniquement ; entrée au mid sans poursuite ; écart achat-vente cumulé
+  des jambes ≤ 3 % de la largeur ; 1 combo par trade tant que 50 trades réels ne sont pas journalisés.
+  Le score sert seulement à classer les candidats qui passent toutes les portes.
 - Événement macro majeur dans la journée (CPI, emploi, PCE, PPI, FOMC, PIB, ISM, ventes au détail) : risk-off,
   rapport seulement.
 
@@ -33,5 +35,7 @@ Résultats du backtest croisé : `backtest.md`. Probabilité de gain : `calibrat
    puis prime, perte maximale, score, probabilité et espérance.
 4. Le JSON des tickets dans un bloc de code (format `tickets-README.md`), pour archive ou pour le robot.
 5. Les candidats écartés et pourquoi, puis les flux utilisés et ceux en échec.
+6. Le journal du run : une ligne CSV par candidat étudié, retenu ou non, dans un bloc de code
+   (quand,titre,sens,score,decision,sources,murs_gamma,gamma_neg,ratio_iv,borrow_fee,prix,atr14,raisons), à conserver.
 
 Réponds en français, chiffres arrondis à 2 décimales, jamais de promesse de rendement.

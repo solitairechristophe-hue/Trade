@@ -94,3 +94,9 @@ Le flux seul reste sans avantage. Le seul setup à espérance non négative mesu
 gamma favorables et gamma des dealers négatif, 33 % de réussite à 1 ATR (IC 95 % 0,24–0,44, n = 84) et +2,9 %
 de la prime en moyenne sur spread simulé. Le desk utilise ce rendement pour l'espérance de ce setup. Détail dans
 `backtest.md`.
+
+## Porte de volatilité (même jour)
+
+Ajouter au setup gamma la condition « IV 30 jours ≤ 1,2 × volatilité prévue par un modèle HAR » porte le spread
+simulé à +11,1 % de la prime en moyenne (n = 49, erreur type 6,4 %), positif sur les deux panels et les deux
+moitiés de la période. C'est le rendement utilisé pour l'espérance. Il reste à confirmer en réel.

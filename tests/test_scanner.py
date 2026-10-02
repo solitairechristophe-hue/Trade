@@ -62,7 +62,7 @@ def chaine(prix=50.0, expiry=dt.date(2026, 11, 20), largeur_pas=1.0, iv=0.45):
 def contexte(**k):
     c = TickerContext(ticker="ACME", price=50.0, atr14=1.2, sma20=48.0, sma50=46.0, avg_volume=5e6,
                       sector="Technology", marketcap=20e9, iv_rank=0.30, call_wall=55.0, put_wall=47.0,
-                      net_call_premium=2e6, net_put_premium=-0.5e6, gex_net=-1e6, chain=chaine())
+                      net_call_premium=2e6, net_put_premium=-0.5e6, gex_net=-1e6, ratio_iv=1.0, chain=chaine())
     for a, v in k.items():
         setattr(c, a, v)
     return c
@@ -350,7 +350,7 @@ def test_sans_gamma_negatif_pas_de_trade(tmp_path):
 def test_esperance_mesuree_et_taille_essai(tmp_path):
     cfg = cfg_test(tmp_path)
     cfg.calibration_file.write_text(json.dumps({"p_min": 0.243, "p_max": 0.259,
-                                                "setups": {"gamma": {"rendement_moyen": 0.029}}}))
+                                                "setups": {"gamma_vol": {"rendement_moyen": 0.029}}}))
     res = scan(cfg, FauxFeeds(), 8918.0, set(), NOW, ecrire=False)
     assert len(res.retenus) == 1
     d = res.retenus[0]
@@ -362,3 +362,54 @@ def test_spread_trop_large_refuse():
     large = contexte(chain=[OptionQuote(q.symbol, q.type, q.strike, q.expiry, q.bid - 0.10, q.ask + 0.10, q.delta,
                                         q.open_interest, q.volume, q.iv) for q in chaine()])
     assert proposer(large, "up", JOUR, min_dte=21, max_dte=50) is None
+
+
+# --- prix de la volatilité, emprunt, famille flux, échéances, journal -------------
+
+def test_prevision_har():
+    from scanner.volatilite import prevision_har, ratio_iv
+    calme = [100 * (1 + 0.01 * ((-1) ** i)) for i in range(60)]  # 101 / 99 : ~2 % de mouvement par jour
+    p = prevision_har(calme)
+    assert p is not None and abs(p - 0.02 * 252 ** 0.5) < 0.01  # variance constante : la prévision vaut la réalisée
+    assert ratio_iv(0.40, calme) > ratio_iv(0.20, calme)
+    assert prevision_har(calme[:10]) is None
+
+
+def test_option_trop_chere_et_emprunt(tmp_path):
+    res = scan(cfg_test(tmp_path), FauxFeeds(ctx={"ACME": contexte(ratio_iv=1.5)}), 8918.0, set(), NOW, ecrire=False)
+    assert res.retenus == [] and any("trop chère" in d for _, d in res.etudies)
+    res2 = scan(cfg_test(tmp_path), FauxFeeds(ctx={"ACME": contexte(ratio_iv=None)}), 8918.0, set(), NOW, ecrire=False)
+    assert res2.retenus == [] and any("non évaluable" in d for _, d in res2.etudies)
+    # baissier avec emprunt cher : refusé
+    baisse = FauxFeeds(alerts=[alerte(type="put"), alerte(type="put", premium=400_000, ask=400_000)],
+                       ctx={"ACME": contexte(sma20=52.0, sma50=53.0, call_wall=53.0, put_wall=44.0, borrow_fee=0.25)})
+    baisse.screener_hits = lambda: []
+    res3 = scan(cfg_test(tmp_path, min_score=0), baisse, 8918.0, set(), NOW, ecrire=False)
+    assert res3.retenus == [] and any("emprunt" in d for _, d in res3.etudies)
+
+
+def test_famille_flux_plafonnee():
+    from scanner.scoring import PLAFOND_FLUX, POIDS
+    big = regrouper([alerte(premium=50e6, ask=50e6)] * 3, [ScreenerHit("ACME", "Unusually Bullish", True)] * 3,
+                    [], [], [], [])["ACME"]
+    big.context = contexte(net_call_premium=50e6, net_put_premium=-50e6, call_wall=None, put_wall=None, gex_net=None,
+                           sma20=0, sma50=0)
+    noter(big, Regime(bias=1.0), JOUR, 50)
+    contrib = sum(POIDS[k] * big.factors[k] for k in ("flow", "screener", "greek_flow"))
+    assert contrib > PLAFOND_FLUX  # sans plafond, le flux pèserait plus
+    import math
+    assert big.score <= round(100 * (0.5 + 0.5 * math.tanh(2.2 * 2 * PLAFOND_FLUX / sum(POIDS.values()))), 1) + 0.1
+
+
+def test_poids_par_echeance():
+    from scanner.scoring import poids_alerte, poids_echeance
+    assert poids_echeance(3) == 0 and poids_echeance(14) == 0.5 and poids_echeance(45) == 1 and poids_echeance(120) == 0.75
+    assert poids_alerte(alerte(expiry=dt.date(2026, 10, 5))) == 0.0  # 0DTE / très court terme ignoré
+
+
+def test_journal_de_tous_les_candidats(tmp_path):
+    cfg = cfg_test(tmp_path, journal_file=tmp_path / "journal.csv")
+    scan(cfg, FauxFeeds(), 8918.0, set(), NOW)
+    scan(cfg, FauxFeeds(ctx={"ACME": contexte(ratio_iv=1.5)}), 8918.0, set(), NOW + dt.timedelta(days=4))
+    lignes = (tmp_path / "journal.csv").read_text().splitlines()
+    assert lignes[0].startswith("quand,titre") and len(lignes) == 3 and "RETENU" in lignes[1] and "trop chère" in lignes[2]

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from .config import ScanConfig
 from .model import Regime
-from .output import ecrire_rapport, ecrire_tickets, rapport_markdown, ticket_id, vers_ticket
+from .output import journaliser, ecrire_rapport, ecrire_tickets, rapport_markdown, ticket_id, vers_ticket
 from .regime import build_regime
 from .scoring import Candidate, murs_contre, noter, preselection, regrouper, setup_gamma
 from .sizing import Dimensionnee, charger_calibration, classer, dimensionner, rendement_setup
@@ -135,6 +135,15 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
         if cfg.require_gamma_setup and not gamma_ok:
             res.etudies.append((c, "écarté : pas de setup gamma (murs favorables et gamma des dealers négatif)"))
             continue
+        if ctx.ratio_iv is None:
+            res.etudies.append((c, "écarté : prix de la volatilité non évaluable (IV ou historique manquant)"))
+            continue
+        if ctx.ratio_iv > cfg.max_ratio_iv:
+            res.etudies.append((c, f"écarté : option trop chère (IV / volatilité prévue = {ctx.ratio_iv:.2f} > {cfg.max_ratio_iv})"))
+            continue
+        if sens < 0 and ctx.borrow_fee is not None and ctx.borrow_fee >= cfg.max_borrow_fee_bear:
+            res.etudies.append((c, f"écarté : emprunt de l'action à {ctx.borrow_fee:.0%}, les puts paient le financement"))
+            continue
         if res.regime.risk_off:
             res.etudies.append((c, "écarté : risk-off (événement macro imminent)"))
             continue
@@ -155,7 +164,7 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
         d = dimensionner(prop, c.score, nav, risk_per_trade=cfg.risk_per_trade,
                          max_premium_per_trade=cfg.max_premium_per_trade, max_contracts=cfg.max_contracts_per_order,
                          risque_restant=budget_risque_total, calib=calib,
-                         rendement=rendement_setup(cfg.calibration_file, "gamma") if gamma_ok else None,
+                         rendement=rendement_setup(cfg.calibration_file, "gamma_vol") if gamma_ok else None,
                          taille_essai=cfg.trial_size)
         if d is None:
             res.etudies.append((c, "écarté : risque par contrat > budget (2 % de la NAV)"))
@@ -181,6 +190,7 @@ def scan(cfg: ScanConfig, feeds, nav: float, positions: set[str], now: dt.dateti
     res.tickets = [vers_ticket(d, cfg.desk, today) for d in res.retenus]
     res.rapport = rapport_markdown(now, res.regime, nav, res.retenus, res.etudies, res.feeds, res.erreurs)
     if ecrire:
+        journaliser(cfg.journal_file, now, res.etudies)
         if res.tickets:
             ecrire_tickets(cfg.tickets_dir, cfg.desk, today, res.tickets)
         ecrire_rapport(cfg.reports_dir, now, cfg.desk, res.rapport)
