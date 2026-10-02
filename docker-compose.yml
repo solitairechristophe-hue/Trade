@@ -32,3 +32,15 @@ services:
     volumes:
       - ./tickets:/tickets:ro
       - ./data:/data
+
+  # Desk eToro (facultatif) : docker compose --profile etoro up -d --build
+  desk-etoro:
+    build: .
+    profiles: ["etoro"]
+    restart: always
+    env_file: .env
+    environment:
+      DESK_ETORO_DATA: /data/desk_etoro
+    command: ["python", "-m", "desk_etoro", "planifier", "--avance", "60"]
+    volumes:
+      - ./data:/data

@@ -1,5 +1,8 @@
 # Robot d'exécution IBKR des desks
 
+> Ce dépôt contient aussi le **desk eToro** (`desk_etoro/`) : il croise les portefeuilles des Popular
+> Investors pour proposer un portefeuille revu chaque semaine à l'ouverture. Voir `desk_etoro/README.md`.
+
 Exécute **automatiquement** dans IBKR les tickets produits par les desks
 (Desk Swing Options, Desk Stock Scanner) : entrée conditionnelle, TP, SL,
 stop du sous-jacent et sortie temps, sans validation manuelle.
@@ -72,6 +75,8 @@ une fois le robot en réel, sinon le trade serait pris deux fois.
 pip install ib_async pytest
 python -m pytest -q tests
 ```
+
+Le desk eToro n'utilise que la bibliothèque standard de Python.
 
 Limites connues : une entrée partiellement exécutée puis annulée est signalée « À VÉRIFIER » et laissée à gérer à la main ;
 le robot ne gère que les positions qu'il a lui-même ouvertes ; sans abonnement IBKR aux données de marché via l'API, le SL ne peut pas être surveillé (le robot l'alerte).

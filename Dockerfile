@@ -4,4 +4,5 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY executor ./executor
+COPY desk_etoro ./desk_etoro
 CMD ["python", "-m", "executor.main"]
