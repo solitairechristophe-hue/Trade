@@ -31,14 +31,19 @@ class Resultat:
     ordres: list[Ordre] = field(default_factory=list)
 
 
-def alias_de_cotation(instruments: dict[int, dict]) -> dict[int, int]:
-    """id d'une cotation secondaire (suffixe .RTH, séance régulière) → id de la cotation principale."""
+def alias_de_cotation(instruments: dict[int, dict], alias_symboles: dict[str, str] | None = None) -> dict[int, int]:
+    """id d'une cotation secondaire → id de la cotation principale du même titre.
+
+    Cotations « séance régulière » (suffixe .RTH) et classes d'actions d'un même émetteur (alias_symboles).
+    """
     par_symbole = {(m.get("symbol") or "").upper(): i for i, m in instruments.items() if m.get("symbol")}
     alias = {}
     for i, m in instruments.items():
         sym = (m.get("symbol") or "").upper()
-        if sym.endswith(".RTH") and sym[:-4] in par_symbole:
-            alias[i] = par_symbole[sym[:-4]]
+        base = sym[:-4] if sym.endswith(".RTH") else sym
+        base = (alias_symboles or {}).get(base, base).upper()
+        if base != sym and base in par_symbole and par_symbole[base] != i:
+            alias[i] = par_symbole[base]
     return alias
 
 
@@ -115,7 +120,7 @@ def executer(cfg: Config, col: Collecteur, jour: dt.date, etat: dict) -> Resulta
     detenus = poids_detenus(etat)
     ids = sorted({i for n in notes for i in n.composition.lignes} | set(detenus))
     res.instruments = col.instruments(ids)
-    alias = alias_de_cotation(res.instruments)
+    alias = alias_de_cotation(res.instruments, cfg.univers.alias_symboles)
     for n in notes:
         n.composition.fusionner(alias)
     res.tickers = tickers.noter(notes, cfg.tickers)

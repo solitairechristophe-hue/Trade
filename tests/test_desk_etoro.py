@@ -96,8 +96,9 @@ def test_composition_actifs_et_renforcement():
 
 def test_fusion_des_cotations():
     from desk_etoro.desk import alias_de_cotation
-    alias = alias_de_cotation({1: {"symbol": "AMZN"}, 2: {"symbol": "AMZN.RTH"}, 3: {"symbol": "XYZ.RTH"}})
-    assert alias == {2: 1}
+    alias = alias_de_cotation({1: {"symbol": "AMZN"}, 2: {"symbol": "AMZN.RTH"}, 3: {"symbol": "XYZ.RTH"},
+                               4: {"symbol": "GOOG"}, 5: {"symbol": "GOOGL"}, 6: {"symbol": "GOOGL.RTH"}}, {"GOOGL": "GOOG"})
+    assert alias == {2: 1, 5: 4, 6: 4}
     c = composition.analyser(live([pos(1, 20), pos(2, 30, ouverture="2026-09-30T10:00:00Z")]), JOUR)
     c.fusionner(alias)
     assert set(c.lignes) == {1} and c.lignes[1].poids == pytest.approx(0.5)
@@ -207,6 +208,10 @@ def test_levier_conditions():
     l2 = lc(2, 70, vol=0.20)
     allocation.appliquer_levier(l2, elig(), haussier, cfg)
     assert l2.levier == 1 and "score" in l2.motif_levier
+    l2b = lc(7, 95, vol=0.20)
+    l2b.rang = 11
+    allocation.appliquer_levier(l2b, elig(), haussier, cfg)
+    assert l2b.levier == 1 and "rang" in l2b.motif_levier
     l3 = lc(3, 90, vol=0.30)
     allocation.appliquer_levier(l3, elig(), Risque(dernier=80, vol=0.30, mm50=100, mm200=90, recul_52s=-0.2), cfg)
     assert l3.levier == 1 and "moyennes" in l3.motif_levier

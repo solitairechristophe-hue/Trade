@@ -1,6 +1,7 @@
 """Portefeuille cible : sélection des tickers, poids, facteur multiplicateur (levier) et stops.
 
-Poids : w_i ∝ (score_i/100) ** exposant_score / vol_i ** exposant_vol, puis plafonds par ligne,
+Poids : w_i ∝ ((score_i − score_min)/(100 − score_min)) ** exposant_score / vol_i ** exposant_vol
+(l'excédent de score au-dessus du seuil, les scores du haut de classement étant serrés), puis plafonds par ligne,
 plancher, plafond crypto et réserve de liquidités.
 Levier : seulement pour une valeur à haut score ET adaptée au levier — classe d'actif admise,
 volatilité modérée, tendance haussière (cours au-dessus des moyennes 50 et 200 jours), proche de
@@ -146,8 +147,9 @@ def ponderer(lignes: list[LigneCible], cfg: Allocation) -> float:
         return 1.0
     vols = [l.vol for l in lignes if l.vol]
     vol_defaut = median(vols) if vols else 0.30
-    bruts = {l.instrument_id: (l.score / 100) ** cfg.exposant_score / max(0.10, l.vol or vol_defaut) ** cfg.exposant_vol
-             for l in lignes}
+    plancher = min(cfg.score_min, min(l.score for l in lignes) - 1)  # une ligne gardée sous le seuil garde un poids
+    bruts = {l.instrument_id: ((l.score - plancher) / (100 - plancher)) ** cfg.exposant_score
+             / max(0.10, l.vol or vol_defaut) ** cfg.exposant_vol for l in lignes}
     poids = _repartir(bruts, investi, cfg.poids_max, cfg.poids_min)
 
     cryptos = [l.instrument_id for l in lignes if l.classe == "crypto"]
@@ -164,6 +166,8 @@ def appliquer_levier(l: LigneCible, elig: dict | None, risque: Risque, cfg: Allo
     motifs = []
     if l.score < cfg.score_levier:
         motifs.append(f"score {l.score:.0f} < {cfg.score_levier:.0f}")
+    elif l.rang > cfg.rang_max_levier:
+        motifs.append(f"rang {l.rang} > {cfg.rang_max_levier}")
     if l.classe not in cfg.classes_levier:
         motifs.append(f"classe {l.classe}")
     if risque.vol is None:

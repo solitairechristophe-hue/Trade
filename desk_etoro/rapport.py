@@ -141,9 +141,10 @@ def markdown(res: Resultat, cfg: Config) -> str:
           f"de la largeur de détention ({t.poids_largeur:.0%}), de la conviction des détenteurs ({t.poids_conviction:.0%}), "
           f"de la qualité moyenne des détenteurs ({t.poids_qualite_detenteurs:.0%}) et des entrées de moins de "
           f"{t.jours_fraicheur} jours ({t.poids_fraicheur:.0%}).",
-          f"- **Poids** ∝ (score/100)^{a.exposant_score:g} / volatilité^{a.exposant_vol:g}, entre {_pct(a.poids_min, 0)} et "
+          f"- **Poids** ∝ ((score − {a.score_min:g}) / {100 - a.score_min:g})^{a.exposant_score:g} / volatilité^{a.exposant_vol:g}, "
+          f"entre {_pct(a.poids_min, 0)} et "
           f"{_pct(a.poids_max, 0)} par ligne, crypto ≤ {_pct(a.poids_max_crypto, 0)}, réserve {_pct(a.reserve_cash, 0)}.",
-          f"- **Facteur multiplicateur** : score ≥ {a.score_levier:g}, classe {', '.join(a.classes_levier)}, volatilité ≤ "
+          f"- **Facteur multiplicateur** : score ≥ {a.score_levier:g} et rang ≤ {a.rang_max_levier}, classe {', '.join(a.classes_levier)}, volatilité ≤ "
           f"{_pct(a.vol_max_levier, 0)}, cours au-dessus des moyennes 50 et 200 jours, à moins de "
           f"{_pct(-a.drawdown_max_levier, 0)} de son plus haut, levier proposé par eToro ; levier = le plus grand permis "
           f"(≤ x{a.levier_max}) tel que levier × vol ≤ {_pct(a.vol_cible_position, 0)} ; exposition brute ≤ "

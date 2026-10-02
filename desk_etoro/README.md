@@ -67,7 +67,8 @@ alors estimée par la hausse du montant investi sur 30 jours. Pour un ticker *i*
 - **qualité des détenteurs** : moyenne de Q (12 %) ;
 - **fraîcheur** : part du poids ouverte ou renforcée depuis moins de 30 jours (8 %).
 
-Le score vaut 100 × la somme pondérée des rangs centiles. Il n'est calculé que pour les tickers détenus par
+Les cotations d'un même titre sont regroupées avant le calcul : versions « séance régulière » `.RTH`
+et classes d'actions d'un même émetteur, comme GOOGL avec GOOG. Le score vaut 100 × la somme pondérée des rangs centiles. Il n'est calculé que pour les tickers détenus par
 au moins 3 portefeuilles votants.
 
 ### 4. Portefeuille cible et facteur multiplicateur
@@ -75,10 +76,11 @@ au moins 3 portefeuilles votants.
 - **Sélection** : les 20 meilleurs scores ≥ 60, hors devises, en consensus acheteur, ouvrables sur le
   compte. Une ligne déjà détenue reste tant que son rang est ≤ 30 et son score ≥ 50 (hystérésis), pour
   éviter de tourner pour rien.
-- **Poids** : (score/100)² / volatilité^0,5, entre 2 % et 10 % par ligne, crypto ≤ 15 % au total,
-  2 % de liquidités.
-- **Levier** : seulement pour une valeur à **haut score**, ≥ 80, et **adaptée au levier**. Il faut que
-  toutes ces conditions soient remplies :
+- **Poids** : ((score − 60) / 40)² / volatilité^0,5. On pondère l'excédent de score au-dessus du seuil,
+  parce que les scores du haut de classement sont serrés. Chaque ligne pèse entre 2 % et 10 %, la crypto
+  15 % au plus au total, et 2 % restent en liquidités.
+- **Levier** : seulement pour une valeur à **haut score** (score ≥ 85 et rang ≤ 10 parmi tous les tickers
+  notés) et **adaptée au levier**. Il faut que toutes ces conditions soient remplies :
   - action, ETF ou indice ;
   - volatilité annuelle ≤ 35 % (calculée sur les bougies quotidiennes eToro) ;
   - cours au-dessus de ses moyennes 50 et 200 jours ;

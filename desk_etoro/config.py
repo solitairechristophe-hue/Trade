@@ -29,6 +29,7 @@ class Univers:
     levier_eleve_max_pct: float = 50.0  # highLeveragePct au-delà duquel le portefeuille est écarté
     max_portefeuilles: int = 0  # 0 = tous les éligibles ; sinon les N meilleurs en pré-qualité
     inclure_copies: bool = False  # transparence sur les positions copiées (socialTrades)
+    alias_symboles: dict = field(default_factory=lambda: {"GOOGL": "GOOG"})  # classes d'actions d'un même émetteur
     source_composition: str = "live"  # live (positions détaillées) ou actifs (répartition, plus léger)
     mois_historique: int = 36  # gains mensuels utilisés pour les critères calculés
 
@@ -63,7 +64,7 @@ class Allocation:
     """Construction du portefeuille cible et facteur de levier."""
     nb_lignes: int = 20
     score_min: float = 60.0
-    exposant_score: float = 2.0  # poids ∝ (score/100) ** exposant / vol ** exposant_vol
+    exposant_score: float = 2.0  # poids ∝ ((score − score_min)/(100 − score_min)) ** exposant / vol ** exposant_vol
     exposant_vol: float = 0.5
     poids_max: float = 0.10
     poids_min: float = 0.02
@@ -73,7 +74,8 @@ class Allocation:
     classes_exclues: tuple[str, ...] = ("currencies",)
     # Facteur multiplicateur (levier)
     levier_max: int = 2
-    score_levier: float = 80.0  # score minimal pour envisager le levier
+    score_levier: float = 85.0  # « haut score » : score minimal pour envisager le levier…
+    rang_max_levier: int = 10  # … et rang parmi les tickers notés
     vol_max_levier: float = 0.35  # volatilité annualisée maximale de l'actif
     vol_cible_position: float = 0.50  # levier × vol ne dépasse pas ce niveau
     drawdown_max_levier: float = -0.25  # recul maximal depuis le plus haut 52 semaines
