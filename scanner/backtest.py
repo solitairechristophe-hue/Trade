@@ -97,10 +97,14 @@ def facteurs(r: dict) -> dict[str, float | None]:
         f["gamma_negatif"] = None
     if g("dist_call_wall_atr") is not None and g("dist_put_wall_atr") is not None:
         # hausse : place jusqu'au call wall et support proche ; baisse : l'inverse
-        place, appui = (g("dist_call_wall_atr"), g("dist_put_wall_atr")) if d > 0 else (g("dist_put_wall_atr"), g("dist_call_wall_atr"))
+        cap = lambda x: max(-5.0, min(5.0, x))  # murs très éloignés : distance plafonnée à 5 ATR
+        place, appui = (cap(g("dist_call_wall_atr")), cap(g("dist_put_wall_atr"))) if d > 0 else \
+            (cap(g("dist_put_wall_atr")), cap(g("dist_call_wall_atr")))
         f["murs_gamma"] = max(-1.0, min(1.0, math.tanh(place) - 0.5 * math.tanh(appui)))
     else:
         f["murs_gamma"] = None
+    mp = g("max_pain_nearest")
+    f["attraction_max_pain"] = (math.tanh((mp - close) / atr) * d) if mp and close and atr else None
     f["au_dessus_flip"] = ((1.0 if g("above_flip") == 1 else -1.0) * d) if g("above_flip") is not None else None
     oc, op = g("oi_call_prem_d"), g("oi_put_prem_d")
     f["open_interest"] = math.tanh(((oc or 0) - (op or 0)) / 2e6) * d if oc is not None or op is not None else None
